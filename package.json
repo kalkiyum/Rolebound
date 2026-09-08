@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "spike:policy": "tsx scripts/spike-privy-policy.ts"
   },
   "dependencies": {
     "@privy-io/node": "^0.34.0",
