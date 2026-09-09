@@ -27,7 +27,11 @@ export const paymentStatus = pgEnum("payment_status", [
   "executing",
   "executed",
   "failed",
+  /** The gate refused, or the chain did. Nobody chose this. */
   "blocked",
+  /** An approver looked at it and said no. Distinct from blocked on purpose:
+   *  the feed should show a decision differently from a refusal. */
+  "rejected",
 ]);
 export const scheduleStatus = pgEnum("schedule_status", [
   "active",
