@@ -20,7 +20,9 @@ export function privy(): PrivyClient {
 /**
  * The two calldata shapes a role wallet is ever allowed to produce. Privy
  * decodes calldata against these to read argument values out of a
- * transaction, so the names here must match the deployed contracts.
+ * transaction, so the names here must match the deployed contracts, and the
+ * `field` that references one is written `functionName.argumentName` — the
+ * API rejects a bare argument name at policy creation.
  */
 const PAY_ABI = [
   {
@@ -65,9 +67,17 @@ import type {
  * there is a window in which it can sign anything.
  *
  * Privy allows at most one policy per wallet, so every rule for a role lives
- * in this single policy. Rules are ALLOW-only — anything not matched here is
- * refused by the enclave, which is the property `pnpm spike:policy` exists to
- * prove against a live app before we depend on it.
+ * in this single policy. Rules are ALLOW-only and unmatched transactions are
+ * refused by the enclave — `pnpm spike:policy` proved that against a live app.
+ *
+ * WHAT THAT SPIKE ALSO PROVED (2026-09-10): only the *transaction-level*
+ * conditions are enforced. A calldata condition is accepted at creation and
+ * then ignored at signing time — an over-cap `amount` and an off-allowlist
+ * recipient were both signed by a wallet whose policy forbade them. So the
+ * contract allowlist below is the hard limit; the calldata conditions are
+ * kept because they cost nothing and become real the day Privy enforces
+ * them, but NOTHING may depend on them. The per-transaction cap and the
+ * recipient allowlist are enforced by `assertCanSpend()`. See PRD §5.
  */
 async function provisionRoleWallet(
   spec: RoleWalletSpec,
@@ -83,7 +93,7 @@ async function provisionRoleWallet(
     },
     {
       field_source: "ethereum_calldata",
-      field: "amount",
+      field: "pay.amount",
       abi: PAY_ABI,
       operator: "lte",
       value: spec.capPerTx.toString(),
@@ -93,7 +103,7 @@ async function provisionRoleWallet(
   if (spec.allowedRecipients.length > 0) {
     payConditions.push({
       field_source: "ethereum_calldata",
-      field: "to",
+      field: "pay.to",
       abi: PAY_ABI,
       operator: "in",
       value: spec.allowedRecipients.map((a) => a.toLowerCase()),
@@ -127,7 +137,7 @@ async function provisionRoleWallet(
           },
           {
             field_source: "ethereum_calldata",
-            field: "spender",
+            field: "approve.spender",
             abi: ERC20_APPROVE_ABI,
             operator: "eq",
             value: env.payAddress.toLowerCase(),

@@ -134,8 +134,10 @@ export async function assertCanSpend(req: SpendRequest): Promise<SpendDecision> 
     }
   }
 
-  // Per-transaction cap. Also enforced in the Privy enclave — this check exists
-  // so the app can route to approval rather than let the signer refuse blindly.
+  // Per-transaction cap. This is the ONLY place it is enforced: the phase 0
+  // spike found Privy's calldata conditions inert, so the enclave will happily
+  // sign an over-cap transfer. The policy still pins which contract a role may
+  // call; the amount is ours to hold. See PRD §5.
   const capPerTx = BigInt(role.capPerTx);
   if (req.amount > capPerTx) {
     return {

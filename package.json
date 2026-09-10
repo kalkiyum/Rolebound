@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "drizzle-kit migrate",
+    "chain": "anvil --port 8546",
+    "chain:setup": "NODE_OPTIONS=--conditions=react-server tsx scripts/setup-local.ts"
   },
   "dependencies": {
     "@privy-io/node": "^0.34.0",

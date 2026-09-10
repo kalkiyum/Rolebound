@@ -4,10 +4,12 @@ import { createPublicClient, createWalletClient, defineChain, http } from "viem"
 import { privateKeyToAccount } from "viem/accounts";
 
 /**
- * A dedicated port, not 8545 — a test run must never quietly attach to a
- * chain the developer is using for something else, or worse, drive it.
+ * A dedicated port — not 8545, and not the 8546 that `pnpm chain` runs the
+ * development chain on. A test run must never quietly attach to a chain
+ * somebody is using for something else, or worse, drive it: the suite wipes
+ * the database between tests and would take the seeded demo with it.
  */
-export const ANVIL_PORT = 8546;
+export const ANVIL_PORT = 8547;
 export const ANVIL_URL = `http://127.0.0.1:${ANVIL_PORT}`;
 
 /** Anvil's deterministic accounts. Public knowledge, worthless off a local chain. */

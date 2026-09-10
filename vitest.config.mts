@@ -4,7 +4,9 @@ import path from "node:path";
 export default defineConfig({
   test: {
     environment: "node",
-    setupFiles: ["dotenv/config"],
+    // dotenv first, then test/db.ts overrides DATABASE_URL — the suite must
+    // never run against the development database.
+    setupFiles: ["dotenv/config", "test/db.ts"],
     globalSetup: ["test/global-setup.ts"],
     // Anvil deploys and the database are both shared state; give them room.
     testTimeout: 30_000,
