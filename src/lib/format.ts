@@ -26,3 +26,17 @@ export function formatUsdc(base: bigint | string, decimals = 6): string {
 export function shortAddress(address: string): string {
   return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
+
+/**
+ * A typed amount to base units, or null when it is not a USDC amount.
+ *
+ * Shared rather than duplicated because the browser signs over the amount and
+ * the server verifies that signature: two parsers that disagree by one unit
+ * would refuse every payment, and the error would point at the signature
+ * rather than at the arithmetic.
+ */
+export function parseUsdc(input: string): bigint | null {
+  if (!/^\d+(\.\d{1,6})?$/.test(input)) return null;
+  const [whole, fraction = ""] = input.split(".");
+  return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
+}

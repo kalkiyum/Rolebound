@@ -30,6 +30,12 @@ export async function createRole(input: {
   const wallet = await provisionRoleWallet({
     roleName: input.name,
     capPerTx: input.capPerTx,
+    // The month's budget is the most any single payment could ever justify,
+    // so it is the enclave's hard ceiling. The per-transaction cap is *not*
+    // used here on purpose: over it a payment needs an approver, and an
+    // enclave that refused those would make approving one pointless. A role
+    // with no monthly budget gets no ceiling, and the gate alone governs.
+    ceiling: input.capMonthly ?? undefined,
     // The policy allows one address the role itself does not: the treasury,
     // so the role can be swept and closed. See `policyRecipients`.
     allowedRecipients: policyRecipients(allowedRecipients, org?.treasuryAddress),

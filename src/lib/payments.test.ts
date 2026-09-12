@@ -1,5 +1,7 @@
 import { beforeAll, beforeEach, afterAll, describe, expect, inject, it } from "vitest";
 import { decodeEventLog, encodeFunctionData, getAddress } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { eq } from "drizzle-orm";
 import { ANVIL_KEYS, ANVIL_URL, publicClient as testClient, walletClient } from "../../test/chain";
 
 // The app reads its chain configuration lazily, so pointing it at Anvil has
@@ -15,7 +17,12 @@ const { db, schema } = await import("@/db");
 const { createRole } = await import("./roles");
 const { grantCapability } = await import("./roles");
 const { requestPayment } = await import("./payments");
-const { hashReason } = await import("./authorization");
+const {
+  hashReason,
+  authorizationDomain,
+  AUTHORIZATION_TYPES,
+  AuthorizationInvalid,
+} = await import("./authorization");
 const { roleboundPayAbi, erc20Abi } = await import("./abi");
 const { roleIdToBytes32 } = await import("./ids");
 
@@ -222,5 +229,206 @@ describe("a payment, end to end on a real chain", () => {
       where: (a, { eq }) => eq(a.orgId, orgId),
     });
     expect(feed.map((e) => e.type)).toContain("payment.blocked");
+  });
+});
+
+/**
+ * 3.4 — the product's attribution claim, exercised through the real pipeline
+ * rather than against `verifyAuthorization()` in isolation. A signature that
+ * is only checked in its own unit test proves nothing about what the payment
+ * path actually does with it.
+ */
+describe("the actor's own signature", () => {
+  const actor = privateKeyToAccount(ANVIL_KEYS[1]);
+  const impostor = privateKeyToAccount(ANVIL_KEYS[2]);
+
+  const sign = (
+    account: typeof actor,
+    message: {
+      roleId: `0x${string}`;
+      to: `0x${string}`;
+      amount: bigint;
+      reasonHash: `0x${string}`;
+      nonce: string;
+    },
+  ) =>
+    account.signTypedData({
+      domain: authorizationDomain(),
+      types: AUTHORIZATION_TYPES,
+      primaryType: "PaymentAuthorization",
+      message,
+    });
+
+  const authorizationFor = (amount: bigint, reason: string, nonce: string) => ({
+    roleId: roleIdToBytes32(roleId),
+    to: VENDOR,
+    amount,
+    reasonHash: hashReason(reason),
+    nonce,
+  });
+
+  /** The actor signs from their embedded wallet, so the member carries it. */
+  async function giveActorAWallet(address: `0x${string}`) {
+    await db
+      .update(schema.members)
+      .set({ address })
+      .where(eq(schema.members.id, memberId));
+  }
+
+  beforeEach(async () => {
+    await giveActorAWallet(actor.address);
+  });
+
+  it("executes and keeps the signature alongside the payment", async () => {
+    const reason = "Landing page design, invoice #204";
+    const amount = USDC("200");
+    const before = await balanceOf(VENDOR);
+
+    const result = await requestPayment({
+      orgId,
+      roleId,
+      memberId,
+      to: VENDOR,
+      amount,
+      reason,
+      nonce: "nonce-executed",
+      actorSignature: await sign(
+        actor,
+        authorizationFor(amount, reason, "nonce-executed"),
+      ),
+    });
+
+    expect(result.status).toBe("executed");
+    expect(await balanceOf(VENDOR)).toBe(before + amount);
+
+    const row = await db.query.payments.findFirst({
+      where: (p, { eq }) => eq(p.id, result.paymentId),
+    });
+    expect(row?.actorSignature).toMatch(/^0x[0-9a-f]{130}$/);
+    expect(row?.nonce).toBe("nonce-executed");
+  });
+
+  it("refuses a signature from anyone but the actor, and moves nothing", async () => {
+    const reason = "Landing page design, invoice #204";
+    const amount = USDC("200");
+    const before = await balanceOf(VENDOR);
+
+    await expect(
+      requestPayment({
+        orgId,
+        roleId,
+        memberId,
+        to: VENDOR,
+        amount,
+        reason,
+        nonce: "nonce-impostor",
+        actorSignature: await sign(
+          impostor,
+          authorizationFor(amount, reason, "nonce-impostor"),
+        ),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationInvalid);
+
+    expect(await balanceOf(VENDOR)).toBe(before);
+    expect(await db.query.payments.findMany()).toHaveLength(0);
+  });
+
+  /**
+   * The signature has to bind the *terms*, not merely the signer. If a
+   * signature over 100 can pay out 900, it authorizes nothing.
+   */
+  it("refuses when the amount signed is not the amount requested", async () => {
+    const reason = "Landing page design, invoice #204";
+    const before = await balanceOf(VENDOR);
+
+    await expect(
+      requestPayment({
+        orgId,
+        roleId,
+        memberId,
+        to: VENDOR,
+        amount: USDC("400"),
+        reason,
+        nonce: "nonce-swapped",
+        actorSignature: await sign(
+          actor,
+          authorizationFor(USDC("100"), reason, "nonce-swapped"),
+        ),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationInvalid);
+
+    expect(await balanceOf(VENDOR)).toBe(before);
+    expect(await db.query.payments.findMany()).toHaveLength(0);
+  });
+
+  it("refuses when the reason signed is not the reason recorded", async () => {
+    const amount = USDC("150");
+    const before = await balanceOf(VENDOR);
+
+    await expect(
+      requestPayment({
+        orgId,
+        roleId,
+        memberId,
+        to: VENDOR,
+        amount,
+        reason: "Legitimate invoice #204",
+        nonce: "nonce-reason",
+        actorSignature: await sign(
+          actor,
+          authorizationFor(amount, "Something else entirely", "nonce-reason"),
+        ),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationInvalid);
+
+    expect(await balanceOf(VENDOR)).toBe(before);
+    expect(await db.query.payments.findMany()).toHaveLength(0);
+  });
+
+  it("refuses a signature from a member with no wallet on file", async () => {
+    await db
+      .update(schema.members)
+      .set({ address: null })
+      .where(eq(schema.members.id, memberId));
+
+    const reason = "No wallet";
+    const amount = USDC("50");
+
+    await expect(
+      requestPayment({
+        orgId,
+        roleId,
+        memberId,
+        to: VENDOR,
+        amount,
+        reason,
+        nonce: "nonce-no-wallet",
+        actorSignature: await sign(
+          actor,
+          authorizationFor(amount, reason, "nonce-no-wallet"),
+        ),
+      }),
+    ).rejects.toBeInstanceOf(AuthorizationInvalid);
+  });
+
+  /**
+   * Agents authenticate with an API key and schedules run unattended, so
+   * neither can produce a member signature. Requiring one would mean the
+   * only way to pay is a browser — and beats 4 and 6.4 both die.
+   */
+  it("still pays when there is no signature at all", async () => {
+    const before = await balanceOf(VENDOR);
+
+    const result = await requestPayment({
+      orgId,
+      roleId,
+      memberId,
+      to: VENDOR,
+      amount: USDC("75"),
+      reason: "Agent-written reason",
+    });
+
+    expect(result.status).toBe("executed");
+    expect(await balanceOf(VENDOR)).toBe(before + USDC("75"));
   });
 });

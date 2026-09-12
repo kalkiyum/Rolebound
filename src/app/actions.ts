@@ -11,8 +11,9 @@ import { revokeGrants, grantCapability } from "@/lib/roles";
 import { cancelSchedule, createSchedule, runSweep } from "@/lib/schedules";
 import { dissolve } from "@/lib/dissolution";
 import { SpendDenied } from "@/lib/gate";
+import { AuthorizationInvalid } from "@/lib/authorization";
 import { ACTOR_COOKIE, currentMember, privyConfigured } from "@/lib/session";
-import { formatUsdc } from "@/lib/format";
+import { formatUsdc, parseUsdc } from "@/lib/format";
 
 /**
  * Every action returns a message rather than throwing at the boundary. A
@@ -49,6 +50,11 @@ export async function payAction(
     return { ok: false, message: "Enter an amount, like 250 or 249.50." };
   }
 
+  // The browser signs before it submits, so these ride along on the form.
+  // Absent in local development, where there is no Privy wallet to sign with.
+  const signature = String(formData.get("actorSignature") ?? "").trim();
+  const nonce = String(formData.get("nonce") ?? "").trim();
+
   try {
     const actor = await actorFor(orgId);
     const result = await requestPayment({
@@ -58,6 +64,8 @@ export async function payAction(
       to: to as `0x${string}`,
       amount,
       reason,
+      actorSignature: signature ? (signature as `0x${string}`) : undefined,
+      nonce: nonce || undefined,
     });
 
     revalidatePath(`/orgs/${orgId}`, "layout");
@@ -78,6 +86,14 @@ export async function payAction(
   } catch (err) {
     if (err instanceof SpendDenied) {
       return { ok: false, message: err.message, code: err.code };
+    }
+    if (err instanceof AuthorizationInvalid) {
+      return {
+        ok: false,
+        message:
+          "This payment could not be tied to your wallet, so nothing was sent.",
+        code: "bad_signature",
+      };
     }
     return { ok: false, message: messageOf(err) };
   }
@@ -385,12 +401,6 @@ export async function runSweepAction(
 }
 
 /** "250.50" → 250500000n. Rejects anything that is not a plain amount. */
-function parseUsdc(input: string): bigint | null {
-  if (!/^\d+(\.\d{1,6})?$/.test(input)) return null;
-  const [whole, fraction = ""] = input.split(".");
-  return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
-}
-
 function messageOf(err: unknown) {
   return err instanceof Error ? err.message : "Something went wrong.";
 }

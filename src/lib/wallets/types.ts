@@ -15,8 +15,17 @@ export interface ProvisionedWallet {
 
 export interface RoleWalletSpec {
   roleName: string;
-  /** Per-transaction ceiling in token base units. */
+  /** Per-transaction ceiling in token base units. Enforced by the app. */
   capPerTx: bigint;
+  /**
+   * The absolute ceiling written into the wallet's Privy policy, in base
+   * units. Deliberately *not* `capPerTx`: over-cap payments are a normal
+   * outcome here — they route to an approver and then execute — so an
+   * enclave that refused them would make the approval queue a dead end.
+   * This is the amount no approval can authorize. Omitted leaves the
+   * enclave silent on amount, and `assertCanSpend()` alone governs.
+   */
+  ceiling?: bigint;
   /** When non-empty, the only addresses this role may pay. */
   allowedRecipients: string[];
 }

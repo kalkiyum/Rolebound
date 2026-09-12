@@ -2,12 +2,18 @@
 pragma solidity ^0.8.24;
 
 /// @title TestUSDC
-/// @notice Six-decimal ERC-20 with an open faucet, for local chains ONLY.
-/// @dev Base Sepolia has real testnet USDC; this exists so the payment
-///      pipeline can be exercised end to end against Anvil with no faucet,
-///      no credentials and no network. `mint` is deliberately unguarded —
-///      which is exactly why this contract must never be deployed to a
-///      public network.
+/// @notice Six-decimal ERC-20 with an open faucet, for local chains and the
+///         Base Sepolia demo.
+/// @dev `mint` is deliberately unguarded, so this must never reach a network
+///      where a token balance is worth anything — mainnet above all.
+///
+///      It is deployed to Base Sepolia all the same. Circle's testnet USDC is
+///      faucet-rationed at roughly ten a day and the demo moves several
+///      thousand, so the choice was between a mintable token and a demo whose
+///      amounts read in fractions of a dollar. Anyone can mint this one; on a
+///      testnet that costs nothing, because nothing here is worth anything.
+///      RoleboundPay takes the token as an argument, so only the address the
+///      app points at changes.
 contract TestUSDC {
     string public constant name = "Test USD Coin";
     string public constant symbol = "USDC";

@@ -208,3 +208,59 @@ describe("reconciliation", () => {
     expect(whenUnknown.some((e) => e.txHash === txHash)).toBe(true);
   });
 });
+
+/**
+ * Base Sepolia's public RPC refuses any `eth_getLogs` spanning more than
+ * 10,000 blocks, and the chain is past block 46,000,000. Scanning from zero
+ * therefore returns nothing on the deployed app while passing every test
+ * here, because Anvil has no such limit and starts at block 0.
+ *
+ * A window of one block is the strictest form of that constraint: it forces
+ * one request per block, so an off-by-one in the loop shows up immediately
+ * as a duplicated or missing event rather than as a subtly short feed.
+ */
+describe("reading logs in windows", () => {
+  it("returns each event exactly once when the range spans many windows", async () => {
+    for (const amount of ["10", "20", "30"]) {
+      const result = await requestPayment({
+        orgId,
+        roleId,
+        memberId,
+        to: VENDOR,
+        amount: USDC(amount),
+        reason: `Windowed payment of ${amount}`,
+      });
+      expect(result.status).toBe("executed");
+    }
+
+    const whole = await fetchPaymentEvents({ windowSize: 10_000n });
+    const windowed = await fetchPaymentEvents({ windowSize: 1n });
+
+    const key = (e: { txHash: string; logIndex: number }) =>
+      `${e.txHash}:${e.logIndex}`;
+
+    // Every event, once each: a window that overlaps its neighbour would
+    // double the boundary blocks, and one that skips would lose them.
+    expect(new Set(windowed.map(key)).size).toBe(windowed.length);
+    expect(windowed.map(key).sort()).toEqual(whole.map(key).sort());
+    expect(windowed.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("covers the final partial window", async () => {
+    // The last window almost never divides evenly into the range, so the
+    // most recent payment is exactly the one a bad bound would drop.
+    const result = await requestPayment({
+      orgId,
+      roleId,
+      memberId,
+      to: VENDOR,
+      amount: USDC("7"),
+      reason: "The most recent payment",
+    });
+    expect(result.status).toBe("executed");
+    if (result.status !== "executed") return;
+
+    const events = await fetchPaymentEvents({ windowSize: 3n });
+    expect(events.map((e) => e.txHash)).toContain(result.txHash);
+  });
+});

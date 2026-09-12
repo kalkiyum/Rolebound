@@ -19,6 +19,13 @@ const paymentEvent = roleboundPayAbi.find(
   (e): e is PaymentEventAbi => e.type === "event" && e.name === "Payment",
 )!;
 
+/**
+ * Base Sepolia's public RPC answers `eth_getLogs is limited to a 10,000
+ * range`. Anvil has no such limit and starts at block 0, which is why this
+ * only ever fails in production.
+ */
+const LOG_WINDOW = 10_000n;
+
 export interface OnchainPayment {
   txHash: `0x${string}`;
   blockNumber: bigint;
@@ -45,18 +52,45 @@ export async function fetchPaymentEvents(opts: {
   toBlock?: bigint;
   /** Application role ids; hashed to their onchain form before filtering. */
   roleIds?: string[];
+  /** Blocks per request. Defaults to the tightest limit we have met. */
+  windowSize?: bigint;
 } = {}): Promise<OnchainPayment[]> {
-  const logs = await publicClient().getLogs({
-    address: env.payAddress,
-    event: paymentEvent,
-    args: opts.roleIds
-      ? { roleId: opts.roleIds.map(roleIdToBytes32) }
-      : undefined,
-    fromBlock: opts.fromBlock ?? 0n,
-    toBlock: opts.toBlock ?? "latest",
-  });
+  const client = publicClient();
+  const windowSize = opts.windowSize ?? LOG_WINDOW;
 
-  return (logs as Array<Log & { args: Record<string, unknown> }>).map((log) => ({
+  // Starting at the deployment rather than at zero. Base Sepolia is past
+  // block 46,000,000, so a scan from zero is four thousand requests before
+  // it reaches the first block that could possibly contain an event.
+  const from =
+    opts.fromBlock ?? (env.payDeployBlock > 0n ? env.payDeployBlock : 0n);
+  // `cacheTime: 0` because viem caches the head for its polling interval by
+  // default, and a stale head excludes the most recently mined block — which
+  // is precisely where the payment someone just made lives.
+  const to = opts.toBlock ?? (await client.getBlockNumber({ cacheTime: 0 }));
+
+  const args = opts.roleIds
+    ? { roleId: opts.roleIds.map(roleIdToBytes32) }
+    : undefined;
+
+  const logs: Array<Log & { args: Record<string, unknown> }> = [];
+
+  // Public RPCs cap the span of a single `eth_getLogs`, and exceeding it is
+  // an error rather than a truncated result — so this is correctness, not
+  // politeness. Windows are inclusive at both ends, hence the -1n: an
+  // off-by-one here would return every boundary block's events twice.
+  for (let start = from; start <= to; start += windowSize) {
+    const end = start + windowSize - 1n > to ? to : start + windowSize - 1n;
+    const page = await client.getLogs({
+      address: env.payAddress,
+      event: paymentEvent,
+      args,
+      fromBlock: start,
+      toBlock: end,
+    });
+    logs.push(...(page as Array<Log & { args: Record<string, unknown> }>));
+  }
+
+  return logs.map((log) => ({
     txHash: log.transactionHash!,
     blockNumber: log.blockNumber!,
     logIndex: log.logIndex!,

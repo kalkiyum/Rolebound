@@ -38,4 +38,12 @@ export const env = {
   get payAddress() {
     return required("NEXT_PUBLIC_ROLEBOUND_PAY_ADDRESS") as `0x${string}`;
   },
+  /**
+   * The block RoleboundPay was deployed in. Log scans start here rather than
+   * at zero — on a public chain the difference is four thousand requests.
+   * Zero on a local chain, where the contract is deployed in block 1 anyway.
+   */
+  get payDeployBlock() {
+    return BigInt(process.env.NEXT_PUBLIC_ROLEBOUND_PAY_DEPLOY_BLOCK ?? "0");
+  },
 };

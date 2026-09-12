@@ -20,6 +20,8 @@ export function nextStep(
       return "Say what the money is for. One sentence is enough, and it is what gets committed onchain.";
     case "invalid_amount":
       return "Enter an amount greater than zero.";
+    case "bad_signature":
+      return "Your wallet did not sign these exact terms. Reload the page and enter the payment again — if it keeps happening, sign out and back in so your wallet is reconnected.";
     case "recipient_not_allowed":
       return `${roleName} can only pay addresses on its own list. Ask an approver to add this one, or pay from a role that already allows it.`;
     default:

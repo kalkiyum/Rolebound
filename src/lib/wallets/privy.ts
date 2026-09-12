@@ -70,14 +70,24 @@ import type {
  * in this single policy. Rules are ALLOW-only and unmatched transactions are
  * refused by the enclave — `pnpm spike:policy` proved that against a live app.
  *
- * WHAT THAT SPIKE ALSO PROVED (2026-09-10): only the *transaction-level*
- * conditions are enforced. A calldata condition is accepted at creation and
- * then ignored at signing time — an over-cap `amount` and an off-allowlist
- * recipient were both signed by a wallet whose policy forbade them. So the
- * contract allowlist below is the hard limit; the calldata conditions are
- * kept because they cost nothing and become real the day Privy enforces
- * them, but NOTHING may depend on them. The per-transaction cap and the
- * recipient allowlist are enforced by `assertCanSpend()`. See PRD §5.
+ * THE SPIKE'S FINDING IS NOW STALE (superseded 2026-09-12). On 2026-09-10 a
+ * calldata condition was accepted at creation and ignored at signing time,
+ * so nothing was allowed to depend on one. That is no longer true: a 1,200
+ * payment from a role whose policy capped `pay.amount` at 500 was refused by
+ * the enclave with `policy_violation`. Privy enforces calldata conditions.
+ *
+ * Which is good, and it cost us a demo beat to discover: the policy had been
+ * built with `pay.amount <= capPerTx`, so the moment enforcement arrived,
+ * every over-cap payment an approver had signed off became unexecutable. The
+ * enclave was refusing the exact case the approval queue exists to serve.
+ *
+ * So the two limits are now separate things, which is what they always were
+ * conceptually:
+ *   - `capPerTx`   — a soft limit. Over it, you need an approver. App layer.
+ *   - `ceiling`    — a hard limit. Over it, nobody can authorize it at all,
+ *                    approver or otherwise. Enclave.
+ * The recipient allowlist and the contract allowlist are both enclave-side
+ * and always were. See PRD §5.
  */
 async function provisionRoleWallet(
   spec: RoleWalletSpec,
@@ -91,14 +101,20 @@ async function provisionRoleWallet(
       operator: "eq",
       value: env.payAddress.toLowerCase(),
     },
-    {
+  ];
+
+  // Only when the role has one. The per-transaction cap deliberately does not
+  // appear here: an over-cap payment is approved and then executed, so a
+  // policy that refused it would turn every approval into a dead end.
+  if (spec.ceiling !== undefined) {
+    payConditions.push({
       field_source: "ethereum_calldata",
       field: "pay.amount",
       abi: PAY_ABI,
       operator: "lte",
-      value: spec.capPerTx.toString(),
-    },
-  ];
+      value: spec.ceiling.toString(),
+    });
+  }
 
   if (spec.allowedRecipients.length > 0) {
     payConditions.push({

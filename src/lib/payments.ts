@@ -3,7 +3,11 @@ import { encodeFunctionData, maxUint256 } from "viem";
 import { eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { erc20Abi, roleboundPayAbi } from "./abi";
-import { hashReason } from "./authorization";
+import {
+  AuthorizationInvalid,
+  hashReason,
+  verifyAuthorization,
+} from "./authorization";
 import { publicClient } from "./chain";
 import { env } from "./env";
 import { assertCanSpend, SpendDenied, type SpendDecision } from "./gate";
@@ -23,7 +27,11 @@ export interface PaymentRequest {
   to: `0x${string}`;
   amount: bigint;
   reason: string;
-  /** Optional here, required by the API layer once members can sign. */
+  /**
+   * Present whenever a person pays from the browser. Absent for agents,
+   * which authenticate with an API key, and for schedules, which run with
+   * nobody at the keyboard. When it is present it is always verified.
+   */
   actorSignature?: `0x${string}`;
   nonce?: string;
 }
@@ -39,6 +47,11 @@ export interface PaymentRequest {
 export async function requestPayment(
   req: PaymentRequest,
 ): Promise<PaymentOutcome> {
+  // Who is asking comes before whether they may. A signature that arrives
+  // and is not checked is worse than none: it puts a proof-shaped thing on
+  // an audit trail that proves nothing.
+  if (req.actorSignature) await verifyActor(req, req.actorSignature);
+
   let decision: SpendDecision;
   try {
     decision = await assertCanSpend({
@@ -102,6 +115,45 @@ export async function requestPayment(
   }
 
   return executePayment({ orgId: req.orgId, paymentId: payment.id });
+}
+
+/**
+ * Checks that the actor really did authorize *these terms*.
+ *
+ * The role wallet's key lives in Privy's enclave, so its signature says a
+ * role paid and nothing about who asked it to. This one binds a named member
+ * to this amount, this recipient and this justification — which is the whole
+ * of what the activity feed claims. Recovering a different address, or a
+ * signature over different terms, is a refusal rather than a warning.
+ */
+async function verifyActor(
+  req: PaymentRequest,
+  signature: `0x${string}`,
+): Promise<void> {
+  if (!req.nonce) {
+    throw new AuthorizationInvalid(
+      "A signed payment must carry the nonce it was signed with.",
+    );
+  }
+
+  const signer = await actorAddress(req.memberId);
+  if (!signer) {
+    throw new AuthorizationInvalid(
+      "This member has no wallet on file, so nothing can be checked against the signature.",
+    );
+  }
+
+  await verifyAuthorization({
+    authorization: {
+      roleId: roleIdToBytes32(req.roleId),
+      to: req.to,
+      amount: req.amount,
+      reasonHash: hashReason(req.reason),
+      nonce: req.nonce,
+    },
+    signature,
+    expectedSigner: signer,
+  });
 }
 
 /**
@@ -226,4 +278,26 @@ export async function ensurePayAllowance(
     }),
   });
   await publicClient().waitForTransactionReceipt({ hash });
+
+  // A mined receipt is not the same as readable state. Public RPCs are load
+  // balanced, and the node that signs the payment is not the node that
+  // returned this receipt — so the first payment from a freshly funded role
+  // can be estimated against a node that still sees an allowance of zero,
+  // and comes back as a bare `execution reverted` with nothing to act on.
+  // Polling the value we are about to depend on costs a few hundred
+  // milliseconds once per role, and turns a confusing failure into a wait.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const confirmed = await publicClient().readContract({
+      address: env.usdc,
+      abi: erc20Abi,
+      functionName: "allowance",
+      args: [roleAddress, env.payAddress],
+    });
+    if (confirmed > maxUint256 / 2n) return;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+
+  throw new Error(
+    `Approved RoleboundPay in ${hash}, but the allowance is still not readable. The RPC may be lagging — retry the payment.`,
+  );
 }

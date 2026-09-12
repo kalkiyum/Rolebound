@@ -91,6 +91,21 @@ function writeEnvLocal(vars: Record<string, string>) {
 }
 
 async function main() {
+  // `.env.local` carries the hosted DATABASE_URL once the app is deployed,
+  // and `seed()` clears every table before it writes. Without this check,
+  // setting up the local chain would wipe the demo organization out of the
+  // production database — and the first sign of it would be an empty screen
+  // at recording time.
+  const database = process.env.DATABASE_URL ?? "";
+  if (database && !/localhost|127\.0\.0\.1/.test(database)) {
+    console.error(
+      "\nDATABASE_URL does not point at a local database.\n" +
+        "This script seeds, and seeding clears every table first.\n" +
+        "Point DATABASE_URL at your local Postgres before running it.\n",
+    );
+    process.exit(1);
+  }
+
   try {
     await publicClient.getBlockNumber();
   } catch {

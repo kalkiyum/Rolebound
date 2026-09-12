@@ -16,7 +16,9 @@
     "chain:setup": "NODE_OPTIONS=--conditions=react-server tsx scripts/setup-local.ts",
     "dev:privy": "tsx scripts/dev-privy.mts",
     "verify:login": "tsx scripts/verify-login.mts",
-    "verify:ui": "tsx scripts/verify-ui.mts"
+    "verify:ui": "tsx scripts/verify-ui.mts",
+    "deploy:testnet": "tsx scripts/deploy-testnet.mts",
+    "seed:testnet": "NODE_OPTIONS=--conditions=react-server tsx scripts/seed-testnet.mts"
   },
   "dependencies": {
     "@privy-io/node": "^0.34.0",

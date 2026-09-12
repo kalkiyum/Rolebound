@@ -26,3 +26,11 @@ describe("nextStep", () => {
     expect(nextStep("something_new", "Marketing")).toBeNull();
   });
 });
+
+describe("a signature that does not check out", () => {
+  it("tells the person how to recover rather than what went wrong", () => {
+    const advice = nextStep("bad_signature", "Marketing");
+    expect(advice).toBeTruthy();
+    expect(advice).toMatch(/sign out and back in/i);
+  });
+});

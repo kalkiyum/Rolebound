@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { roleDetail } from "@/lib/role-detail";
 import { roleBalances } from "@/lib/balances";
-import { currentMember } from "@/lib/session";
+import { currentMember, privyConfigured } from "@/lib/session";
 import { PayForm } from "@/components/rolebound/pay-form";
 import { DissolveRole } from "@/components/rolebound/dissolve-role";
 import { dissolutionImpact } from "@/lib/dissolution";
@@ -83,6 +83,7 @@ export default async function RoleDetailPage({
                   capPerTx={role.capPerTx}
                   remainingMonthly={remainingMonthly}
                   canSpend={canSpend}
+                  signingEnabled={privyConfigured()}
                 />
               </div>
             </section>
