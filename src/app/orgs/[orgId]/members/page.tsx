@@ -51,7 +51,7 @@ export default async function MembersPage({
                 <div className="min-w-0">
                   <Link
                     href={`/orgs/${orgId}/members/${member.id}`}
-                    className="inline-flex items-center gap-2 font-medium hover:underline underline-offset-4"
+                    className="inline-flex items-center gap-2 py-1.5 -my-1.5 font-medium hover:underline underline-offset-4"
                   >
                     {member.displayName}
                     <KindBadge kind={member.kind} />
@@ -71,7 +71,7 @@ export default async function MembersPage({
 
                 <Link
                   href={`/orgs/${orgId}/members/${member.id}`}
-                  className="shrink-0 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  className="shrink-0 py-1.5 -my-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
                 >
                   Manage
                 </Link>

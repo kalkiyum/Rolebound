@@ -2,7 +2,7 @@ import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { logActivity } from "./activity";
-import { provisionRoleWallet } from "./wallets";
+import { policyRecipients, provisionRoleWallet } from "./wallets";
 
 /**
  * A role IS a wallet. Creating one provisions a real Privy server wallet
@@ -23,10 +23,16 @@ export async function createRole(input: {
     a.toLowerCase(),
   );
 
+  const org = await db.query.organizations.findFirst({
+    where: eq(schema.organizations.id, input.orgId),
+  });
+
   const wallet = await provisionRoleWallet({
     roleName: input.name,
     capPerTx: input.capPerTx,
-    allowedRecipients,
+    // The policy allows one address the role itself does not: the treasury,
+    // so the role can be swept and closed. See `policyRecipients`.
+    allowedRecipients: policyRecipients(allowedRecipients, org?.treasuryAddress),
   });
 
   const [role] = await db

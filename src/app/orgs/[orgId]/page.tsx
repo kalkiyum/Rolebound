@@ -98,7 +98,10 @@ export default async function RolesPage({ params }: PageProps<"/orgs/[orgId]">) 
                 key={role.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-border px-4 py-3 text-sm text-muted-foreground"
               >
-                <Link href={`/orgs/${orgId}/roles/${role.id}`} className="hover:text-foreground">
+                <Link
+                  href={`/orgs/${orgId}/roles/${role.id}`}
+                  className="py-1.5 -my-1.5 hover:text-foreground"
+                >
                   {role.name}
                 </Link>
                 <AddressChip address={role.address} />

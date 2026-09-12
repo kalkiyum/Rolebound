@@ -12,6 +12,7 @@
 import { config as loadEnv } from "dotenv";
 import { execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
 import path from "node:path";
 import {
   createPublicClient,
@@ -121,6 +122,9 @@ async function main() {
     // them here keeps the local loop local without touching `.env`.
     NEXT_PUBLIC_PRIVY_APP_ID: "",
     PRIVY_APP_SECRET: "",
+    // The sweep refuses everything without this, so a fresh clone would find
+    // recurring payments silently doing nothing.
+    CRON_SECRET: randomBytes(18).toString("hex"),
   });
 
   // Point this process at what we just deployed, then seed through the real

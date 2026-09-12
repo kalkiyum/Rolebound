@@ -17,6 +17,7 @@ export function OrgNav({
   const items = [
     { href: base, label: "Roles" },
     { href: `${base}/approvals`, label: "Approvals", count: waitingCount },
+    { href: `${base}/recurring`, label: "Recurring" },
     { href: `${base}/activity`, label: "Activity" },
     { href: `${base}/members`, label: "People & agents" },
   ];

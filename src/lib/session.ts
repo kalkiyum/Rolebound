@@ -2,6 +2,8 @@ import "server-only";
 import { cookies } from "next/headers";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { memberForPrivyUser } from "./identity";
+import { verifiedPrivyUserId } from "./privy-auth";
 
 /** Set by the development actor switcher. Never read when Privy is configured. */
 export const ACTOR_COOKIE = "rb_actor";
@@ -23,9 +25,16 @@ export function privyConfigured() {
  */
 export async function currentMember(orgId: string) {
   if (privyConfigured()) {
-    // Resolved from the verified Privy session once login lands (step 1.5).
-    // Returning null renders the signed-out state rather than guessing.
-    return null;
+    // Verified server-side, every request. A member row is only reachable
+    // through a Privy token this server checked the signature on, so the
+    // gate downstream is deciding about a person who genuinely authenticated.
+    const privyUserId = await verifiedPrivyUserId();
+    if (!privyUserId) return null;
+
+    const member = await memberForPrivyUser(privyUserId);
+    // A member in a different org is not this org's member. Returning it
+    // would leak a seat across organizations.
+    return member && member.orgId === orgId ? member : null;
   }
 
   const jar = await cookies();

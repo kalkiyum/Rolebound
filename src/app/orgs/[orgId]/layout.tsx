@@ -6,6 +6,11 @@ import { currentMember, orgMembers, privyConfigured } from "@/lib/session";
 import { pendingApprovals } from "@/lib/approvals";
 import { ActorSwitcher } from "@/components/rolebound/actor-switcher";
 import { OrgNav } from "@/components/rolebound/org-nav";
+import { SignIn } from "@/components/rolebound/sign-in";
+import { ClaimSeat } from "@/components/rolebound/claim-seat";
+import { SignOut } from "@/components/rolebound/sign-out";
+import { unclaimedMembers } from "@/lib/identity";
+import { verifiedPrivyUserId } from "@/lib/privy-auth";
 
 export default async function OrgLayout({
   children,
@@ -24,11 +29,21 @@ export default async function OrgLayout({
     pendingApprovals(orgId),
   ]);
 
+  // Three states, and only the last one is the application: not signed in,
+  // signed in but not yet attached to a seat, and someone the org knows.
+  // Deciding this in the layout means no page below has to wonder whether
+  // it has an actor.
+  if (privyConfigured() && !actor) {
+    const signedIn = await verifiedPrivyUserId();
+    if (!signedIn) return <SignIn />;
+    return <ClaimSeat orgId={orgId} members={await unclaimedMembers(orgId)} />;
+  }
+
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <header className="border-b border-border">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-baseline gap-2">
+          <Link href="/" className="flex items-baseline gap-2 py-1.5 -my-1.5">
             <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
               Rolebound
             </span>
@@ -36,7 +51,9 @@ export default async function OrgLayout({
           </Link>
 
           <div className="ml-auto">
-            {privyConfigured() ? null : (
+            {privyConfigured() ? (
+              <SignOut name={actor?.displayName ?? null} />
+            ) : (
               <ActorSwitcher orgId={orgId} members={members} actorId={actor?.id ?? null} />
             )}
           </div>

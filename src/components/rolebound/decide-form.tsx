@@ -6,6 +6,7 @@ import { decideAction, type ActionResult } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Outcome } from "@/components/rolebound/primitives";
 
 /**
  * Approving and turning down are the same form because they are the same
@@ -53,43 +54,49 @@ export function DecideForm({
   }
 
   return (
-    <form action={action} className="flex flex-wrap items-end gap-3">
-      <input type="hidden" name="orgId" value={orgId} />
-      <input type="hidden" name="paymentId" value={paymentId} />
+    <form action={action} className="space-y-3">
+      {state && !state.ok ? (
+        <Outcome tone="refused" title={state.message} />
+      ) : null}
 
-      <div className="min-w-56 flex-1 space-y-2">
-        <Label htmlFor={`why-${paymentId}`} className="text-xs">
-          Your reason
-        </Label>
-        <Input
-          id={`why-${paymentId}`}
-          name="approvalReason"
-          required
-          autoComplete="off"
-          placeholder="Checked the invoice against the SOW"
-        />
-      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="orgId" value={orgId} />
+        <input type="hidden" name="paymentId" value={paymentId} />
 
-      <div className="flex gap-2">
-        <Button
-          type="submit"
-          name="decision"
-          value="approve"
-          disabled={pending}
-          size="sm"
-        >
-          {pending ? "Working…" : "Approve and pay"}
-        </Button>
-        <Button
-          type="submit"
-          name="decision"
-          value="reject"
-          disabled={pending}
-          size="sm"
-          variant="outline"
-        >
-          Turn down
-        </Button>
+        <div className="min-w-56 flex-1 space-y-2">
+          <Label htmlFor={`why-${paymentId}`} className="text-xs">
+            Your reason
+          </Label>
+          <Input
+            id={`why-${paymentId}`}
+            name="approvalReason"
+            required
+            autoComplete="off"
+            placeholder="Checked the invoice against the SOW"
+          />
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            type="submit"
+            name="decision"
+            value="approve"
+            disabled={pending}
+            size="sm"
+          >
+            {pending ? "Working…" : "Approve and pay"}
+          </Button>
+          <Button
+            type="submit"
+            name="decision"
+            value="reject"
+            disabled={pending}
+            size="sm"
+            variant="outline"
+          >
+            Turn down
+          </Button>
+        </div>
       </div>
     </form>
   );

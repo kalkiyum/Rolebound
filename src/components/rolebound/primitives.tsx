@@ -178,6 +178,43 @@ export function KindBadge({ kind }: { kind: "person" | "agent" }) {
  * Empty states say what the thing is and what to do next. "No data" tells a
  * first-time reader nothing about what this screen is for.
  */
+/**
+ * The result of a mutation, kept on screen.
+ *
+ * A toast is right for "saved"; it is wrong for "this payment was refused
+ * and here is what to do about it", which is the single most important
+ * sentence this product ever shows and which nobody can read in four
+ * seconds. Refusals stay until the next attempt replaces them.
+ */
+export function Outcome({
+  tone,
+  title,
+  children,
+}: {
+  tone: "ok" | "waiting" | "refused";
+  title: string;
+  children?: React.ReactNode;
+}) {
+  const skin = {
+    ok: "border-emerald-600/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300",
+    waiting: "border-amber-600/30 bg-amber-500/5 text-amber-800 dark:text-amber-300",
+    refused: "border-destructive/30 bg-destructive/5 text-destructive",
+  }[tone];
+
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={cn("rounded-lg border px-4 py-3 text-sm", skin)}
+    >
+      <p className="font-medium">{title}</p>
+      {children ? (
+        <p className="mt-1 text-pretty opacity-90">{children}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function EmptyState({
   title,
   children,

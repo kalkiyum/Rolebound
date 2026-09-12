@@ -37,6 +37,28 @@ export const roleboundPayAbi = [
   },
 ] as const;
 
+/**
+ * Deliberately NOT part of `erc20Abi`.
+ *
+ * A role wallet calling `transfer` is money leaving with no reason committed
+ * on chain, and the Privy policy refuses it — proven, not assumed. Keeping
+ * the encoding out of the shared ABI means no payment path can reach for it
+ * by accident. The treasury is the one wallet this is legitimate for: it
+ * holds the org's own funds and tops roles up, which is not a role spending.
+ */
+export const erc20TransferAbi = [
+  {
+    type: "function",
+    name: "transfer",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+] as const;
+
 export const erc20Abi = [
   {
     type: "function",

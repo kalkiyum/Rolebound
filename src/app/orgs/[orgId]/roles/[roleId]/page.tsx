@@ -3,6 +3,8 @@ import { roleDetail } from "@/lib/role-detail";
 import { roleBalances } from "@/lib/balances";
 import { currentMember } from "@/lib/session";
 import { PayForm } from "@/components/rolebound/pay-form";
+import { DissolveRole } from "@/components/rolebound/dissolve-role";
+import { dissolutionImpact } from "@/lib/dissolution";
 import {
   Money,
   AddressChip,
@@ -40,6 +42,16 @@ export default async function RoleDetailPage({
 
   const spenders = holders.filter((h) => h.capability === "spend");
   const approvers = holders.filter((h) => h.capability === "approve");
+
+  // Dissolving takes approve authority, so the control only appears for the
+  // people who could actually go through with it.
+  const canDissolve =
+    role.status === "active" &&
+    !!actor &&
+    approvers.some((h) => h.memberId === actor.id);
+  const impact = canDissolve
+    ? await dissolutionImpact({ orgId, roleId })
+    : null;
 
   return (
     <>
@@ -159,8 +171,9 @@ export default async function RoleDetailPage({
             </dl>
 
             <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground text-pretty">
-              The per-payment cap is enforced in the wallet&rsquo;s policy, not
-              only here. The monthly cap is enforced by this app.
+              The wallet&rsquo;s own policy is what stops it calling anything
+              but this app&rsquo;s payment contract &mdash; that part is
+              enforced in Privy&rsquo;s enclave. The caps are enforced here.
             </p>
           </section>
 
@@ -180,6 +193,28 @@ export default async function RoleDetailPage({
               </div>
             )}
           </section>
+
+          {impact ? (
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h2 className="text-sm font-medium text-muted-foreground">
+                Closing the role
+              </h2>
+              <p className="mt-1.5 mb-4 text-sm text-muted-foreground text-pretty">
+                A role that has served its purpose should not stay a live
+                wallet.
+              </p>
+              <DissolveRole
+                orgId={orgId}
+                roleId={roleId}
+                roleName={role.name}
+                balance={impact.balance}
+                returnsTo={impact.returnsTo}
+                scheduleCount={impact.schedules.length}
+                holderCount={impact.holders.length}
+                pendingCount={impact.pendingPayments.length}
+              />
+            </section>
+          ) : null}
         </aside>
       </div>
     </>

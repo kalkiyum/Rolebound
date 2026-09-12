@@ -67,7 +67,7 @@ export default async function ApprovalsPage({
                   <span aria-hidden>·</span>
                   <Link
                     href={`/orgs/${orgId}/roles/${p.roleId}`}
-                    className="underline underline-offset-4 hover:text-foreground"
+                    className="py-1.5 -my-1.5 underline underline-offset-4 hover:text-foreground"
                   >
                     {p.roleName}
                   </Link>

@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Outcome } from "@/components/rolebound/primitives";
 import { formatUsdc } from "@/lib/format";
+import { nextStep } from "@/lib/deny-help";
 
 export function PayForm({
   orgId,
@@ -39,6 +41,9 @@ export function PayForm({
       toast.error(state.message);
     }
   }, [state]);
+
+  // A refusal is the product working, so it is shown rather than flashed.
+  const advice = state && !state.ok ? nextStep(state.code, roleName) : null;
 
   if (!canSpend) {
     return (
@@ -117,6 +122,21 @@ export function PayForm({
           money. The words stay here; the commitment is public and permanent.
         </p>
       </div>
+
+      {state ? (
+        <Outcome
+          tone={
+            !state.ok
+              ? "refused"
+              : /approver/.test(state.message)
+                ? "waiting"
+                : "ok"
+          }
+          title={state.message}
+        >
+          {advice}
+        </Outcome>
+      ) : null}
 
       <Button type="submit" disabled={pending}>
         {pending ? "Sending…" : "Send payment"}

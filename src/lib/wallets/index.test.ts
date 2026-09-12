@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { walletBackend } from "./index";
+import { policyRecipients, walletBackend } from "./index";
 
 const KEYS = [
   "NEXT_PUBLIC_PRIVY_APP_ID",
@@ -57,5 +57,34 @@ describe("walletBackend", () => {
     configure({ privy: false, chainId: "84532" });
 
     expect(() => walletBackend()).toThrow(/No wallet backend/i);
+  });
+});
+
+describe("policyRecipients", () => {
+  const TREASURY = "0x00000000000000000000000000000000000000AA";
+  const VENDOR = "0x00000000000000000000000000000000000000bb";
+
+  it("leaves an unrestricted role unrestricted", () => {
+    // An empty list means "anywhere". Adding the treasury to it would turn
+    // that into "the treasury only", which is the opposite of the intent.
+    expect(policyRecipients([], TREASURY)).toEqual([]);
+  });
+
+  it("adds the treasury so a dissolution sweep stays inside the policy", () => {
+    expect(policyRecipients([VENDOR], TREASURY)).toEqual([
+      VENDOR.toLowerCase(),
+      TREASURY.toLowerCase(),
+    ]);
+  });
+
+  it("does not repeat a treasury that is already allowed", () => {
+    expect(policyRecipients([VENDOR, TREASURY], TREASURY)).toEqual([
+      VENDOR.toLowerCase(),
+      TREASURY.toLowerCase(),
+    ]);
+  });
+
+  it("copes with an org that has no treasury address yet", () => {
+    expect(policyRecipients([VENDOR], null)).toEqual([VENDOR.toLowerCase()]);
   });
 });

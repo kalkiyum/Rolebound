@@ -55,3 +55,25 @@ export const provisionTreasuryWallet: WalletBackend["provisionTreasuryWallet"] =
 
 export const sendFromWallet: WalletBackend["send"] = (r) =>
   walletBackend().send(r);
+
+/**
+ * The recipient list the *policy* gets, which is not quite the one the role
+ * gets. Dissolving a role sweeps its balance back to the treasury through
+ * the same `pay()` call as any other payment, so the treasury has to be a
+ * legal destination — otherwise the day Privy starts enforcing calldata
+ * conditions (it does not today; see PRD §5) every role becomes impossible
+ * to close.
+ *
+ * An empty list is left empty: it means "anywhere", and adding one address
+ * to it would silently narrow the role to that address alone.
+ */
+export function policyRecipients(
+  allowed: string[],
+  treasury: string | null | undefined,
+): string[] {
+  const list = allowed.map((a) => a.toLowerCase());
+  if (list.length === 0 || !treasury) return list;
+
+  const address = treasury.toLowerCase();
+  return list.includes(address) ? list : [...list, address];
+}

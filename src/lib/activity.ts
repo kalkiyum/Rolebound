@@ -10,13 +10,19 @@ export type ActivityType =
   | "role.created"
   | "role.dissolved"
   | "member.added"
+  | "member.claimed"
   | "grant.created"
   | "grant.revoked"
   | "payment.requested"
   | "payment.executed"
   | "payment.blocked"
   | "payment.approved"
-  | "payment.rejected";
+  | "payment.rejected"
+  | "schedule.created"
+  | "schedule.ran"
+  | "schedule.short"
+  | "schedule.unstaffed"
+  | "schedule.cancelled";
 
 export async function logActivity(entry: {
   orgId: string;

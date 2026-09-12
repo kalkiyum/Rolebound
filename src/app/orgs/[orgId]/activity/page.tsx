@@ -21,6 +21,8 @@ function headline(entry: FeedEntry) {
   const cap = String(entry.payload?.capability ?? "act");
 
   switch (entry.type) {
+    case "member.claimed":
+      return `${who} signed in and took over their seat`;
     case "org.created":
       return `${who} created this organization`;
     case "role.created":
@@ -43,6 +45,16 @@ function headline(entry: FeedEntry) {
       return `${who} approved a payment from ${role}`;
     case "payment.rejected":
       return `${who} turned down a payment from ${role}`;
+    case "schedule.created":
+      return `${who} set up a recurring payment from ${role}`;
+    case "schedule.cancelled":
+      return `${who} cancelled a recurring payment from ${role}`;
+    case "schedule.ran":
+      return `A recurring payment ran from ${role}`;
+    case "schedule.short":
+      return `${role} was short for a recurring payment`;
+    case "schedule.unstaffed":
+      return `${role} has a recurring payment and nobody to run it`;
     default:
       return `${who} — ${entry.type}`;
   }
