@@ -22,6 +22,20 @@ export function walletBackend(): WalletBackend {
   const hasPrivy =
     !!process.env.NEXT_PUBLIC_PRIVY_APP_ID && !!process.env.PRIVY_APP_SECRET;
 
+  // Privy has no eip155:31337, so this pairing cannot work in either
+  // direction: Privy will not sign for a local chain, and wallets already
+  // provisioned locally are not wallets it knows. Left to fall through to
+  // the Privy backend it fails much later, inside an SDK call, as
+  // "Invalid wallet ID" — which reads like a database problem and is not.
+  if (hasPrivy && env.chainId === LOCAL_CHAIN_ID) {
+    throw new Error(
+      `Privy is configured but the chain is ${LOCAL_CHAIN_ID} (Anvil), which ` +
+        `Privy cannot sign for. For local development, blank the Privy ` +
+        `variables in .env.local — \`pnpm chain:setup\` writes them for you. ` +
+        `To use Privy, point NEXT_PUBLIC_CHAIN_ID at a real chain.`,
+    );
+  }
+
   if (hasPrivy) return privyBackend;
 
   if (env.chainId === LOCAL_CHAIN_ID) return localBackend;

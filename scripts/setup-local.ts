@@ -114,6 +114,13 @@ async function main() {
     NEXT_PUBLIC_RPC_URL: RPC_URL,
     NEXT_PUBLIC_USDC_ADDRESS: usdc,
     NEXT_PUBLIC_ROLEBOUND_PAY_ADDRESS: pay,
+    // Blanked deliberately, and this is the file that must say so: Privy
+    // cannot sign for chain 31337, so real credentials sitting in `.env`
+    // would send the dev server to a backend that has never heard of these
+    // locally-provisioned wallets. `.env.local` wins in Next, so emptying
+    // them here keeps the local loop local without touching `.env`.
+    NEXT_PUBLIC_PRIVY_APP_ID: "",
+    PRIVY_APP_SECRET: "",
   });
 
   // Point this process at what we just deployed, then seed through the real

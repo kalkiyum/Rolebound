@@ -9,7 +9,8 @@
  */
 import { db, schema } from "@/db";
 import { createRole, grantCapability } from "@/lib/roles";
-import { addMember } from "@/lib/orgs";
+import { addMember, createOrg } from "@/lib/orgs";
+import { issueApiKey } from "@/lib/agents";
 import { requestPayment } from "@/lib/payments";
 import { approvePayment } from "@/lib/approvals";
 
@@ -32,15 +33,13 @@ export async function seed(opts: {
   await db.delete(schema.grants);
   await db.delete(schema.organizations);
 
-  const [org] = await db
-    .insert(schema.organizations)
-    .values({ name: "Northwind Labs" })
-    .returning();
-
-  const maya = await addMember({
-    orgId: org.id,
-    kind: "person",
-    displayName: "Maya Okonkwo",
+  // Through createOrg, not a direct insert: it provisions the treasury
+  // wallet, and an org seeded without one has no funding source for role
+  // top-ups — a state the real app cannot produce.
+  const { org, owner: maya } = await createOrg({
+    name: "Northwind Labs",
+    ownerName: "Maya Okonkwo",
+    privyUserId: "seed:maya",
   });
   const dev = await addMember({
     orgId: org.id,
@@ -150,8 +149,18 @@ export async function seed(opts: {
     reason: "Design retainer",
   });
 
+  // The agent needs a credential to be demonstrable. Printed once, here,
+  // because only the hash is stored and there is nowhere to read it back.
+  const { key } = await issueApiKey(agent.id);
+
   console.log(`\n  Northwind Labs — /orgs/${org.id}`);
   console.log(`  4 members · 3 roles · 6 payments · 1 awaiting approval`);
+  console.log(`  treasury ${org.treasuryAddress}`);
+  console.log(`\n  Growth agent API key (shown once):\n    ${key}`);
+  console.log(`\n  curl -sX POST localhost:3001/api/agent/pay \\`);
+  console.log(`    -H "authorization: Bearer ${key}" \\`);
+  console.log(`    -H "content-type: application/json" \\`);
+  console.log(`    -d '{"roleId":"${marketing.id}","to":"${VENDORS.saas}","amount":"120.00","reason":"Ad platform top-up"}'`);
   return org;
 }
 
