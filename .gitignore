@@ -44,3 +44,10 @@ next-env.d.ts
 # docs — local only, README is the exception
 *.md
 !README.md
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+.env*.local
