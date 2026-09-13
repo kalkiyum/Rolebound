@@ -40,3 +40,19 @@ export function parseUsdc(input: string): bigint | null {
   const [whole, fraction = ""] = input.split(".");
   return BigInt(whole) * 1_000_000n + BigInt(fraction.padEnd(6, "0"));
 }
+
+/**
+ * A block explorer link for a transaction, or null on a chain that has none.
+ *
+ * "Verified onchain" is a claim, and a claim the reader cannot go and check
+ * for themselves is just our database talking. Anvil has no explorer, so the
+ * badge stands alone there rather than linking somewhere broken.
+ */
+export function explorerTx(txHash: string, chainId: number): string | null {
+  const base: Record<number, string> = {
+    8453: "https://basescan.org",
+    84532: "https://sepolia.basescan.org",
+  };
+  const host = base[chainId];
+  return host ? `${host}/tx/${txHash}` : null;
+}

@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, inArray } from "drizzle-orm";
+import { aliasedTable, desc, eq, inArray } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { verifyPayments, type Verification } from "./indexer";
 
@@ -9,6 +9,8 @@ export interface FeedEntry {
   at: Date;
   actorName: string | null;
   actorKind: "person" | "agent" | null;
+  /** Who the entry was done *to* — the member granted, or revoked. */
+  subjectName: string | null;
   roleName: string | null;
   payload: Record<string, unknown> | null;
   /** Present for entries about a payment. */
@@ -36,6 +38,8 @@ export interface FeedEntry {
  * Rendering the reason without that verdict would be asking the reader to
  * trust our database, which is the thing the commitment exists to avoid.
  */
+const subject = aliasedTable(schema.members, "subject");
+
 export async function orgFeed(orgId: string, limit = 50): Promise<FeedEntry[]> {
   const rows = await db
     .select({
@@ -46,10 +50,18 @@ export async function orgFeed(orgId: string, limit = 50): Promise<FeedEntry[]> {
       subjectId: schema.activity.subjectId,
       actorName: schema.members.displayName,
       actorKind: schema.members.kind,
+      subjectName: subject.displayName,
       roleName: schema.roles.name,
     })
     .from(schema.activity)
     .leftJoin(schema.members, eq(schema.members.id, schema.activity.actorId))
+    // `subject_id` holds a member id on grant entries and a payment id on
+    // payment ones, so this joins on grant entries and misses harmlessly on
+    // the rest. Read from the members table rather than copied into the
+    // payload at write time: a name recorded once goes stale, and an audit
+    // trail that says "someone" — which is what it said before this join —
+    // is not an audit trail.
+    .leftJoin(subject, eq(subject.id, schema.activity.subjectId))
     .leftJoin(schema.roles, eq(schema.roles.id, schema.activity.roleId))
     .where(eq(schema.activity.orgId, orgId))
     .orderBy(desc(schema.activity.createdAt))
@@ -86,6 +98,7 @@ export async function orgFeed(orgId: string, limit = 50): Promise<FeedEntry[]> {
       at: row.at,
       actorName: row.actorName,
       actorKind: row.actorKind,
+      subjectName: row.subjectName,
       roleName: row.roleName,
       payload: row.payload,
       payment: payment

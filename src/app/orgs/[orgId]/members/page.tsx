@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { listRoles } from "@/lib/roles";
 import { orgMembers } from "@/lib/session";
+import { memberSpend } from "@/lib/spend";
 import {
   EmptyState,
   KindBadge,
+  Money,
   PageHeader,
 } from "@/components/rolebound/primitives";
 
@@ -16,6 +18,7 @@ export default async function MembersPage({
     orgMembers(orgId),
     listRoles(orgId),
   ]);
+  const spending = await memberSpend(members.map((m) => m.id));
 
   return (
     <>
@@ -32,6 +35,7 @@ export default async function MembersPage({
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border">
           {members.map((member) => {
+            const spend = spending.get(member.id)!;
             const held = roles
               .filter((role) => role.holders.some((h) => h.memberId === member.id))
               .map((role) => ({
@@ -69,12 +73,28 @@ export default async function MembersPage({
                   </p>
                 </div>
 
-                <Link
-                  href={`/orgs/${orgId}/members/${member.id}`}
-                  className="shrink-0 py-1.5 -my-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                >
-                  Manage
-                </Link>
+                <div className="flex shrink-0 items-center gap-6">
+                  <div className="text-right">
+                    <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                      This month
+                    </p>
+                    <p className="mt-0.5 text-sm">
+                      <Money base={spend.paid} unit={null} />
+                    </p>
+                    {spend.pending > 0n ? (
+                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                        <Money base={spend.pending} unit={null} /> pending
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <Link
+                    href={`/orgs/${orgId}/members/${member.id}`}
+                    className="py-1.5 -my-1.5 text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                  >
+                    Manage
+                  </Link>
+                </div>
               </li>
             );
           })}

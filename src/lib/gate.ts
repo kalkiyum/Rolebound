@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { grants, members, payments, roles } from "@/db/schema";
+import { CONSUMING, startOfMonthUTC } from "./spend";
 
 /**
  * THE GATE — PRD §4's single invariant.
@@ -44,14 +45,6 @@ export interface SpendRequest {
   amount: bigint;
   reason: string;
   to: string;
-}
-
-/** Payments that have consumed budget or are about to. Pending ones count, so
- *  a queue of approvals cannot collectively overshoot the monthly cap. */
-const CONSUMING = ["pending_approval", "executing", "executed"] as const;
-
-function startOfMonthUTC(now = new Date()): Date {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 }
 
 /**

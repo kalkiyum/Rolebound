@@ -1,4 +1,6 @@
 import { orgFeed, type FeedEntry } from "@/lib/feed";
+import { env } from "@/lib/env";
+import { explorerTx } from "@/lib/format";
 import {
   AddressChip,
   EmptyState,
@@ -19,6 +21,10 @@ function headline(entry: FeedEntry) {
   const who = entry.actorName ?? "Someone";
   const role = entry.roleName ?? "a role";
   const cap = String(entry.payload?.capability ?? "act");
+  // The payload is the fallback, not the source: older entries recorded a
+  // name there, newer ones resolve it from the members table.
+  const subject =
+    entry.subjectName ?? String(entry.payload?.displayName ?? "someone");
 
   switch (entry.type) {
     case "member.claimed":
@@ -30,11 +36,11 @@ function headline(entry: FeedEntry) {
     case "role.dissolved":
       return `${who} dissolved ${role}`;
     case "member.added":
-      return `${who} added ${String(entry.payload?.displayName ?? "someone")}`;
+      return `${who} added ${subject}`;
     case "grant.created":
-      return `${who} gave ${String(entry.payload?.displayName ?? "someone")} ${cap} rights on ${role}`;
+      return `${who} gave ${subject} ${cap} rights on ${role}`;
     case "grant.revoked":
-      return `${who} removed ${String(entry.payload?.displayName ?? "someone")} from ${role}`;
+      return `${who} removed ${subject} from ${role}`;
     case "payment.requested":
       return `${who} requested a payment from ${role}`;
     case "payment.executed":
@@ -65,6 +71,21 @@ export default async function ActivityPage({
 }: PageProps<"/orgs/[orgId]/activity">) {
   const { orgId } = await params;
   const entries = await orgFeed(orgId);
+
+  // A payment is requested, then approved, then executed — three events, by
+  // up to three different people, and the audit trail needs all of them. But
+  // each one carries the payment's *current* state, so rendering the full
+  // card on every one put the same 1,200 on screen three times over, each
+  // stamped "Paid". The newest event for a payment shows it in full; the
+  // earlier ones reference it in a line. The feed is newest-first, so the
+  // first id we meet is the one that gets the card.
+  const shown = new Set<string>();
+  const full = new Map<string, boolean>();
+  for (const entry of entries) {
+    if (!entry.payment) continue;
+    full.set(entry.id, !shown.has(entry.payment.id));
+    shown.add(entry.payment.id);
+  }
 
   return (
     <>
@@ -97,7 +118,14 @@ export default async function ActivityPage({
                 <TimeAgo at={entry.at} />
               </div>
 
-              {entry.payment ? (
+              {entry.payment && !full.get(entry.id) ? (
+                <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+                  <Money base={entry.payment.amount} unit={null} />
+                  <span className="text-pretty">{entry.payment.reason}</span>
+                </p>
+              ) : null}
+
+              {entry.payment && full.get(entry.id) ? (
                 <div className="mt-2.5 rounded-lg border border-border bg-card p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
                     <div className="flex flex-wrap items-baseline gap-x-2.5">
@@ -121,12 +149,38 @@ export default async function ActivityPage({
                     </p>
                   ) : null}
 
-                  <p
-                    title="keccak256 of the reason, committed in the same transaction that moved the money."
-                    className="mt-3 truncate border-t border-border pt-3 font-mono text-[11px] text-muted-foreground"
-                  >
-                    {entry.payment.reasonHash}
-                  </p>
+                  <dl className="mt-3 space-y-1 border-t border-border pt-3 text-[11px] text-muted-foreground">
+                    <div className="flex gap-2">
+                      <dt
+                        title="keccak256 of the reason, committed in the same transaction that moved the money."
+                        className="w-20 shrink-0"
+                      >
+                        Reason hash
+                      </dt>
+                      <dd className="truncate font-mono">
+                        {entry.payment.reasonHash}
+                      </dd>
+                    </div>
+                    {entry.payment.txHash ? (
+                      <div className="flex gap-2">
+                        <dt className="w-20 shrink-0">Transaction</dt>
+                        <dd className="truncate font-mono">
+                          {explorerTx(entry.payment.txHash, env.chainId) ? (
+                            <a
+                              href={explorerTx(entry.payment.txHash, env.chainId)!}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                            >
+                              {entry.payment.txHash}
+                            </a>
+                          ) : (
+                            entry.payment.txHash
+                          )}
+                        </dd>
+                      </div>
+                    ) : null}
+                  </dl>
                 </div>
               ) : null}
             </li>

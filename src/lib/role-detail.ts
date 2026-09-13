@@ -1,14 +1,8 @@
 import "server-only";
-import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { verifyPayments } from "./indexer";
-
-/** Mirrors the gate's definition — pending spend still counts against a month. */
-const CONSUMING = ["pending_approval", "executing", "executed"] as const;
-
-function startOfMonthUTC(now = new Date()) {
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-}
+import { monthSpend } from "./spend";
 
 export async function roleDetail(orgId: string, roleId: string) {
   const role = await db.query.roles.findFirst({
@@ -52,21 +46,11 @@ export async function roleDetail(orgId: string, roleId: string) {
     rows.map((r) => ({ id: r.id, txHash: r.txHash, reason: r.reason, amount: r.amount })),
   );
 
-  // What is left of the monthly cap, so the limit can be shown before it bites.
-  let spentThisMonth: bigint | null = null;
-  if (role.capMonthly !== null) {
-    const [row] = await db
-      .select({ spent: sql<string>`coalesce(sum(${schema.payments.amount}), 0)` })
-      .from(schema.payments)
-      .where(
-        and(
-          eq(schema.payments.roleId, roleId),
-          inArray(schema.payments.status, [...CONSUMING]),
-          gte(schema.payments.createdAt, startOfMonthUTC()),
-        ),
-      );
-    spentThisMonth = BigInt(row?.spent ?? "0");
-  }
+  // Computed for every role, not only capped ones. A role with no monthly cap
+  // still spends money, and a budget panel that goes silent about it because
+  // there is no limit to compare against is answering the wrong question:
+  // "what is left" matters less than "what went out".
+  const spend = (await monthSpend([role])).get(role.id)!;
 
   return {
     role,
@@ -75,6 +59,6 @@ export async function roleDetail(orgId: string, roleId: string) {
       ...r,
       verification: verdicts.get(r.id) ?? { state: "pending" as const },
     })),
-    spentThisMonth,
+    spend,
   };
 }

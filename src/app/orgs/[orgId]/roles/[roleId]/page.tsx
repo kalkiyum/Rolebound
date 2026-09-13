@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cn } from "@/lib/utils";
 import { roleDetail } from "@/lib/role-detail";
 import { roleBalances } from "@/lib/balances";
 import { currentMember, privyConfigured } from "@/lib/session";
@@ -7,6 +8,7 @@ import { DissolveRole } from "@/components/rolebound/dissolve-role";
 import { dissolutionImpact } from "@/lib/dissolution";
 import {
   Money,
+  SpendMeter,
   AddressChip,
   EmptyState,
   PageHeader,
@@ -27,14 +29,12 @@ export default async function RoleDetailPage({
   ]);
   if (!detail) notFound();
 
-  const { role, holders, payments, spentThisMonth } = detail;
+  const { role, holders, payments, spend } = detail;
   const balances = await roleBalances([role.address]);
   const balance = balances.get(role.address.toLowerCase()) ?? null;
 
   const remainingMonthly =
-    role.capMonthly !== null && spentThisMonth !== null
-      ? (BigInt(role.capMonthly) - spentThisMonth).toString()
-      : null;
+    spend.remaining === null ? null : spend.remaining.toString();
 
   const canSpend = holders.some(
     (h) => h.memberId === actor?.id && h.capability === "spend",
@@ -60,7 +60,8 @@ export default async function RoleDetailPage({
         description={
           role.status === "active" ? (
             <>
-              This role holds its own wallet. Its balance is its budget.
+              This role holds its own wallet. What it may spend is capped per
+              payment and per month; what it holds is whatever is left.
             </>
           ) : (
             <>This role has been dissolved. Its history stays readable.</>
@@ -143,38 +144,71 @@ export default async function RoleDetailPage({
 
         <aside className="space-y-6">
           <section className="rounded-lg border border-border bg-card p-5">
-            <h2 className="text-sm font-medium text-muted-foreground">Budget</h2>
-            <Money base={balance} className="mt-2 block text-2xl" muted />
+            <h2 className="text-sm font-medium text-muted-foreground">
+              This month
+            </h2>
 
-            <dl className="mt-5 space-y-2 border-t border-border pt-4 text-sm">
+            <Money base={spend.consumed} className="mt-1.5 block text-2xl" muted />
+            <p className="mt-1 text-sm text-muted-foreground">
+              {spend.capMonthly === null ? (
+                "committed. No monthly cap on this role."
+              ) : (
+                <>
+                  committed of <Money base={spend.capMonthly} unit={null} /> this
+                  role may spend
+                </>
+              )}
+            </p>
+
+            <SpendMeter
+              paid={spend.paid}
+              pending={spend.pending}
+              cap={spend.capMonthly}
+              className="mt-3"
+            />
+
+            <dl className="mt-4 space-y-2 text-sm">
+              <Figure
+                label="Paid out"
+                value={spend.paid}
+                swatch={spend.capMonthly === null ? null : "bg-foreground/80"}
+              />
+              {spend.pending > 0n ? (
+                <Figure
+                  label="Awaiting approval"
+                  value={spend.pending}
+                  swatch={spend.capMonthly === null ? null : "bg-amber-500/60"}
+                />
+              ) : null}
+              {remainingMonthly !== null ? (
+                <Figure
+                  label="Left this month"
+                  value={BigInt(remainingMonthly)}
+                  swatch="bg-muted"
+                />
+              ) : null}
+            </dl>
+
+            <dl className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-muted-foreground">Per payment</dt>
+                <dt className="text-muted-foreground">In the wallet</dt>
+                <dd>
+                  <Money base={balance} unit={null} />
+                </dd>
+              </div>
+              <div className="flex justify-between gap-3">
+                <dt className="text-muted-foreground">Cap per payment</dt>
                 <dd>
                   <Money base={role.capPerTx} unit={null} />
                 </dd>
               </div>
-              {role.capMonthly ? (
-                <>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">Monthly cap</dt>
-                    <dd>
-                      <Money base={role.capMonthly} unit={null} />
-                    </dd>
-                  </div>
-                  <div className="flex justify-between gap-3">
-                    <dt className="text-muted-foreground">Left this month</dt>
-                    <dd>
-                      <Money base={remainingMonthly} unit={null} />
-                    </dd>
-                  </div>
-                </>
-              ) : null}
             </dl>
 
             <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground text-pretty">
-              The wallet&rsquo;s own policy is what stops it calling anything
-              but this app&rsquo;s payment contract &mdash; that part is
-              enforced in Privy&rsquo;s enclave. The caps are enforced here.
+              A payment awaiting approval has not left the wallet, and still
+              counts against the month &mdash; so the queue cannot collectively
+              overshoot the cap. The caps are enforced here; what the wallet may
+              call at all is enforced in Privy&rsquo;s enclave.
             </p>
           </section>
 
@@ -219,6 +253,35 @@ export default async function RoleDetailPage({
         </aside>
       </div>
     </>
+  );
+}
+
+/**
+ * One line of the budget breakdown, with the swatch that ties it to its
+ * segment of the bar. Without the swatch the bar is decoration: nothing on
+ * screen says which colour is the 900 that has not been approved yet.
+ */
+function Figure({
+  label,
+  value,
+  swatch,
+}: {
+  label: string;
+  value: bigint;
+  swatch: string | null;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <dt className="flex items-center gap-2 text-muted-foreground">
+        {swatch ? (
+          <span aria-hidden className={cn("size-2 shrink-0 rounded-full", swatch)} />
+        ) : null}
+        {label}
+      </dt>
+      <dd>
+        <Money base={value} unit={null} />
+      </dd>
+    </div>
   );
 }
 

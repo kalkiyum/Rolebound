@@ -44,6 +44,61 @@ export function Money({
   );
 }
 
+/**
+ * A month's spending against the cap that governs it.
+ *
+ * Two segments, not one. What has been paid is gone; what is awaiting
+ * approval is still in the wallet but already counted by the gate, and a
+ * reader who cannot see the difference will think the balance is wrong.
+ * Over the cap the whole bar turns — the one state that must not look like
+ * a nearly-full bar.
+ */
+export function SpendMeter({
+  paid,
+  pending,
+  cap,
+  className,
+}: {
+  paid: bigint;
+  pending: bigint;
+  cap: bigint | null;
+  className?: string;
+}) {
+  // Without a cap there is no denominator, so there is no bar to draw. The
+  // amounts still get reported; they just have nothing to be a fraction of.
+  if (cap === null || cap === 0n) return null;
+
+  const pct = (value: bigint) => Number((value * 10_000n) / cap) / 100;
+  const over = paid + pending > cap;
+  const paidPct = Math.min(pct(paid), 100);
+  const pendingPct = Math.min(pct(pending), Math.max(0, 100 - paidPct));
+
+  return (
+    <div
+      className={cn(
+        "flex h-1.5 w-full overflow-hidden rounded-full bg-muted",
+        className,
+      )}
+      role="img"
+      aria-label={`${formatUsdc(paid + pending)} of ${formatUsdc(cap)} USDC committed this month`}
+    >
+      <div
+        style={{ width: `${over ? 100 : paidPct}%` }}
+        className={cn(
+          "h-full",
+          over ? "bg-destructive" : "bg-foreground/80",
+        )}
+      />
+      {!over && pendingPct > 0 ? (
+        <div
+          style={{ width: `${pendingPct}%` }}
+          className="h-full bg-amber-500/60"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function AddressChip({
   address,
   className,
