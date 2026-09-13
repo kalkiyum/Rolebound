@@ -2,6 +2,8 @@ import Link from "next/link";
 import { pendingApprovals } from "@/lib/approvals";
 import { capabilitiesFor, currentMember } from "@/lib/session";
 import { DecideForm } from "@/components/rolebound/decide-form";
+import { ApprovalImpact } from "@/components/rolebound/approval-impact";
+import { monthSpend } from "@/lib/spend";
 import {
   AddressChip,
   EmptyState,
@@ -23,6 +25,14 @@ export default async function ApprovalsPage({
   const capabilities = actor
     ? await capabilitiesFor(orgId, actor.id)
     : new Map<string, Set<"spend" | "approve">>();
+
+  // Deduplicated: two payments waiting on the same role share one month.
+  const spending = await monthSpend(
+    [...new Map(waiting.map((p) => [p.roleId, p])).values()].map((p) => ({
+      id: p.roleId,
+      capMonthly: p.capMonthly,
+    })),
+  );
 
   return (
     <>
@@ -46,7 +56,7 @@ export default async function ApprovalsPage({
             return (
               <li
                 key={p.id}
-                className="rounded-lg border border-border bg-card p-5"
+                className="rounded-xl border border-border bg-card p-5"
               >
                 <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
                   <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -82,6 +92,16 @@ export default async function ApprovalsPage({
                       <>would pass the role&rsquo;s monthly cap</>
                     )}
                   </span>
+                </div>
+
+                <div className="mt-4">
+                  <ApprovalImpact
+                    roleName={p.roleName}
+                    amount={BigInt(p.amount)}
+                    paid={spending.get(p.roleId)?.paid ?? 0n}
+                    pending={spending.get(p.roleId)?.pending ?? 0n}
+                    capMonthly={p.capMonthly === null ? null : BigInt(p.capMonthly)}
+                  />
                 </div>
 
                 <div className="mt-5 border-t border-border pt-4">

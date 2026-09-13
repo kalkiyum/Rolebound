@@ -119,3 +119,47 @@ export async function orgFeed(orgId: string, limit = 50): Promise<FeedEntry[]> {
     };
   });
 }
+
+/**
+ * The last few payments across the whole org, newest first.
+ *
+ * The roles view answers what the budgets are; this answers whether anything
+ * is actually happening in them. A dashboard of limits with no movement on it
+ * describes a policy document, not a treasury.
+ */
+export async function recentPayments(orgId: string, limit = 6) {
+  const rows = await db
+    .select({
+      id: schema.payments.id,
+      amount: schema.payments.amount,
+      reason: schema.payments.reason,
+      status: schema.payments.status,
+      txHash: schema.payments.txHash,
+      toAddress: schema.payments.toAddress,
+      createdAt: schema.payments.createdAt,
+      roleId: schema.roles.id,
+      roleName: schema.roles.name,
+      actorName: schema.members.displayName,
+      actorKind: schema.members.kind,
+    })
+    .from(schema.payments)
+    .innerJoin(schema.roles, eq(schema.roles.id, schema.payments.roleId))
+    .innerJoin(schema.members, eq(schema.members.id, schema.payments.actorId))
+    .where(eq(schema.roles.orgId, orgId))
+    .orderBy(desc(schema.payments.createdAt))
+    .limit(limit);
+
+  const verdicts = await verifyPayments(
+    rows.map((r) => ({
+      id: r.id,
+      txHash: r.txHash,
+      reason: r.reason,
+      amount: r.amount,
+    })),
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    verification: verdicts.get(row.id) ?? { state: "pending" as const },
+  }));
+}

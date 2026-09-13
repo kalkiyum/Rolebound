@@ -82,7 +82,7 @@ export default async function MembersPage({
                       <Money base={spend.paid} unit={null} />
                     </p>
                     {spend.pending > 0n ? (
-                      <p className="text-xs text-amber-700 dark:text-amber-400">
+                      <p className="text-xs text-gated-ink">
                         <Money base={spend.pending} unit={null} /> pending
                       </p>
                     ) : null}

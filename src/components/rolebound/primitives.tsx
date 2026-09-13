@@ -92,7 +92,7 @@ export function SpendMeter({
       {!over && pendingPct > 0 ? (
         <div
           style={{ width: `${pendingPct}%` }}
-          className="h-full bg-amber-500/60"
+          className="h-full bg-gated/60"
         />
       ) : null}
     </div>
@@ -131,7 +131,7 @@ export function VerifiedBadge({ state }: { state: VerificationState }) {
     verified: {
       label: "Verified onchain",
       className:
-        "border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+        "border-verified/30 bg-verified-soft text-verified-ink",
       title: "The reason shown hashes to the value committed in the transaction.",
     },
     pending: {
@@ -142,13 +142,13 @@ export function VerifiedBadge({ state }: { state: VerificationState }) {
     not_found: {
       label: "No matching event",
       className:
-        "border-amber-600/25 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+        "border-gated/30 bg-gated-soft text-gated-ink",
       title: "We have a transaction hash but found no Payment event for it.",
     },
     mismatch: {
       label: "Does not match chain",
       className:
-        "border-destructive/30 bg-destructive/10 text-destructive font-medium",
+        "border-refused/40 bg-refused-soft text-refused font-medium",
       title:
         "The stored reason or amount does not hash to what was committed onchain.",
     },
@@ -168,10 +168,10 @@ export function VerifiedBadge({ state }: { state: VerificationState }) {
         aria-hidden
         className={cn(
           "size-1.5 rounded-full",
-          state === "verified" && "bg-emerald-600 dark:bg-emerald-400",
+          state === "verified" && "bg-verified",
           state === "pending" && "bg-muted-foreground/50",
-          state === "not_found" && "bg-amber-600 dark:bg-amber-400",
-          state === "mismatch" && "bg-destructive",
+          state === "not_found" && "bg-gated",
+          state === "mismatch" && "bg-refused",
         )}
       />
       {s.label}
@@ -183,16 +183,16 @@ const STATUS_LABELS: Record<string, { label: string; className: string }> = {
   executed: { label: "Paid", className: "border-border bg-muted text-foreground" },
   pending_approval: {
     label: "Awaiting approval",
-    className: "border-amber-600/25 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+    className: "border-gated/30 bg-gated-soft text-gated-ink",
   },
   executing: { label: "Sending", className: "border-border bg-muted text-muted-foreground" },
   blocked: {
     label: "Blocked",
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
+    className: "border-refused/30 bg-refused-soft text-refused",
   },
   failed: {
     label: "Failed",
-    className: "border-destructive/30 bg-destructive/10 text-destructive",
+    className: "border-refused/30 bg-refused-soft text-refused",
   },
   rejected: {
     label: "Turned down",
@@ -251,9 +251,9 @@ export function Outcome({
   children?: React.ReactNode;
 }) {
   const skin = {
-    ok: "border-emerald-600/30 bg-emerald-500/5 text-emerald-800 dark:text-emerald-300",
-    waiting: "border-amber-600/30 bg-amber-500/5 text-amber-800 dark:text-amber-300",
-    refused: "border-destructive/30 bg-destructive/5 text-destructive",
+    ok: "border-verified/30 bg-verified-soft text-verified-ink",
+    waiting: "border-gated/30 bg-gated-soft text-gated-ink",
+    refused: "border-refused/30 bg-refused-soft text-refused",
   }[tone];
 
   return (

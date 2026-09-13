@@ -1,5 +1,5 @@
 import "server-only";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, gte, inArray, sql } from "drizzle-orm";
 import { db, schema } from "@/db";
 
 /**

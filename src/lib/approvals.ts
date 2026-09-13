@@ -185,6 +185,7 @@ export async function pendingApprovals(orgId: string) {
       requestedById: schema.members.id,
       requesterKind: schema.members.kind,
       capPerTx: schema.roles.capPerTx,
+      capMonthly: schema.roles.capMonthly,
     })
     .from(schema.payments)
     .innerJoin(schema.roles, eq(schema.roles.id, schema.payments.roleId))

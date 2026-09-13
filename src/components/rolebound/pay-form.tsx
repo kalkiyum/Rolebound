@@ -5,7 +5,6 @@ import {
   useActionState,
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from "react";
 import { useSignTypedData, useWallets } from "@privy-io/react-auth";
@@ -16,6 +15,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Outcome } from "@/components/rolebound/primitives";
+import { AuthorityDial } from "@/components/rolebound/authority-dial";
+import { GateTrace, type Check } from "@/components/rolebound/gate-trace";
+import { previewGate, type Limits } from "@/lib/preview";
 import { formatUsdc, parseUsdc } from "@/lib/format";
 import { nextStep } from "@/lib/deny-help";
 import {
@@ -43,6 +45,7 @@ interface PayFormProps {
   roleName: string;
   capPerTx: string;
   remainingMonthly: string | null;
+  capMonthly: string | null;
   canSpend: boolean;
   /**
    * Whether there is a Privy wallet in this session to sign with. False in
@@ -132,6 +135,7 @@ function PayFormFields({
   roleName,
   capPerTx,
   remainingMonthly,
+  capMonthly,
   canSpend,
   sign,
 }: PayFormProps & { sign: SignAuthorization | null }) {
@@ -139,22 +143,120 @@ function PayFormFields({
     payAction,
     null,
   );
-  const formRef = useRef<HTMLFormElement>(null);
 
   // Signing happens before the action runs, and the wallet may take a moment
   // or be declined, so the button has to speak for that window too.
   const [signing, setSigning] = useState(false);
   const [signingError, setSigningError] = useState<string | null>(null);
 
+  // Mirrored into state purely so the dial and the trace can react as the
+  // form is filled in. The submitted values still come from the form itself.
+  const [draft, setDraft] = useState({ amount: "", to: "", reason: "" });
+
+  const limits: Limits = {
+    capPerTx: BigInt(capPerTx),
+    remainingMonthly: remainingMonthly === null ? null : BigInt(remainingMonthly),
+    capMonthly: capMonthly === null ? null : BigInt(capMonthly),
+  };
+
+  const amount = parseUsdc(draft.amount.trim());
+  const amountTyped = draft.amount.trim().length > 0;
+  const preview = amount === null ? null : previewGate(amount, limits);
+  const addressOk = /^0x[a-fA-F0-9]{40}$/.test(draft.to.trim());
+  const reasonOk = draft.reason.trim().length > 0;
+
+  const checks: Check[] = [
+    { state: "ok", label: <>You hold a live <strong className="font-medium">spend</strong> grant on {roleName}</> },
+    {
+      state: !amountTyped ? "idle" : amount === null ? "bad" : "ok",
+      label:
+        amountTyped && amount === null
+          ? "That is not an amount this token can hold — six decimals at most"
+          : "The amount is a valid USDC figure",
+    },
+    {
+      state: !draft.to.trim() ? "idle" : addressOk ? "ok" : "bad",
+      label: draft.to.trim() && !addressOk
+        ? "That recipient is not a wallet address"
+        : "The recipient is an address the role's policy permits",
+    },
+    {
+      state: reasonOk ? "ok" : "idle",
+      label: "A reason is given, and gets hashed into the same transaction",
+    },
+    {
+      state: !preview
+        ? "idle"
+        : preview.because === "over_per_tx_cap"
+          ? "gated"
+          : "ok",
+      label: (
+        <>
+          Under {roleName}&rsquo;s{" "}
+          <span className="tnum">{formatUsdc(capPerTx)}</span> per-payment cap
+        </>
+      ),
+    },
+    ...(remainingMonthly !== null
+      ? [
+          {
+            state: (!preview
+              ? "idle"
+              : preview.because === "over_monthly_budget"
+                ? "gated"
+                : "ok") as Check["state"],
+            label: (
+              <>
+                Within the{" "}
+                <span className="tnum">{formatUsdc(remainingMonthly)}</span> left
+                of this month
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(capMonthly !== null
+      ? [
+          {
+            state: (!preview
+              ? "idle"
+              : preview.because === "over_ceiling"
+                ? "bad"
+                : "ok") as Check["state"],
+            label: (
+              <>
+                Under the{" "}
+                <span className="tnum">{formatUsdc(capMonthly)}</span> ceiling
+                in the wallet&rsquo;s Privy policy
+              </>
+            ),
+          },
+        ]
+      : []),
+    ...(sign
+      ? [
+          {
+            state: "idle" as Check["state"],
+            label: "You sign it; the server recovers your address before paying",
+          },
+        ]
+      : []),
+  ];
+
   useEffect(() => {
     if (!state) return;
-    if (state.ok) {
-      toast.success(state.message);
-      formRef.current?.reset();
-    } else {
-      toast.error(state.message);
-    }
+    if (state.ok) toast.success(state.message);
+    else toast.error(state.message);
   }, [state]);
+
+  // Emptying the form is a render-time adjustment rather than an effect: it
+  // is derived from a new result arriving, so doing it in an effect would
+  // paint the sent payment's numbers once before clearing them.
+  const [handled, setHandled] = useState(state);
+  if (state !== handled) {
+    setHandled(state);
+    if (state?.ok) setDraft({ amount: "", to: "", reason: "" });
+  }
 
   const onSubmit = useCallback(
     async (event: React.FormEvent<HTMLFormElement>) => {
@@ -223,7 +325,6 @@ function PayFormFields({
 
   return (
     <form
-      ref={formRef}
       action={action}
       onSubmit={onSubmit}
       className="space-y-4"
@@ -231,66 +332,76 @@ function PayFormFields({
       <input type="hidden" name="orgId" value={orgId} />
       <input type="hidden" name="roleId" value={roleId} />
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="amount">Amount</Label>
-          <Input
-            id="amount"
-            name="amount"
-            inputMode="decimal"
-            placeholder="250.00"
-            autoComplete="off"
-            required
-            className="font-mono tabular-nums"
-          />
-          <p className="text-xs text-muted-foreground">
-            Up to{" "}
-            <span className="font-mono tabular-nums">{formatUsdc(capPerTx)}</span>{" "}
-            without approval
-            {remainingMonthly !== null ? (
-              <>
-                {" · "}
-                <span className="font-mono tabular-nums">
-                  {formatUsdc(remainingMonthly)}
-                </span>{" "}
-                left this month
-              </>
-            ) : null}
-          </p>
+      <div className="grid gap-5 lg:grid-cols-[1fr_17rem]">
+        <div className="min-w-0 space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="amount">Amount</Label>
+            <div className="relative">
+              <Input
+                id="amount"
+                name="amount"
+                inputMode="decimal"
+                placeholder="250.00"
+                autoComplete="off"
+                required
+                value={draft.amount}
+                onChange={(e) =>
+                  setDraft((d) => ({ ...d, amount: e.target.value }))
+                }
+                className="h-14 pr-16 font-mono text-2xl tnum md:text-2xl"
+              />
+              <span className="pointer-events-none absolute inset-y-0 right-4 flex items-center text-sm text-muted-foreground">
+                USDC
+              </span>
+            </div>
+
+            <AuthorityDial
+              amount={amount}
+              limits={limits}
+              roleName={roleName}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="to">Recipient</Label>
+            <Input
+              id="to"
+              name="to"
+              placeholder="0x…"
+              autoComplete="off"
+              required
+              value={draft.to}
+              onChange={(e) => setDraft((d) => ({ ...d, to: e.target.value }))}
+              className="font-mono text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="reason">
+              Reason <span className="text-muted-foreground">(required)</span>
+            </Label>
+            <Textarea
+              id="reason"
+              name="reason"
+              rows={2}
+              required
+              value={draft.reason}
+              onChange={(e) =>
+                setDraft((d) => ({ ...d, reason: e.target.value }))
+              }
+              placeholder="Landing page design, invoice #204"
+            />
+            <p className="text-xs text-muted-foreground text-pretty">
+              Committed onchain as a hash in the same transaction that moves the
+              money. The words stay here; the commitment is public and permanent.
+              {sign ? " You sign it first, so the record names you." : null}
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="to">Recipient</Label>
-          <Input
-            id="to"
-            name="to"
-            placeholder="0x…"
-            autoComplete="off"
-            required
-            className="font-mono text-sm"
-          />
-          <p className="text-xs text-muted-foreground">
-            The wallet being paid.
-          </p>
+        <div className="lg:pt-7">
+          <GateTrace checks={checks} />
         </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="reason">
-          Reason <span className="text-muted-foreground">(required)</span>
-        </Label>
-        <Textarea
-          id="reason"
-          name="reason"
-          rows={2}
-          required
-          placeholder="Landing page design, invoice #204"
-        />
-        <p className="text-xs text-muted-foreground text-pretty">
-          Committed onchain as a hash in the same transaction that moves the
-          money. The words stay here; the commitment is public and permanent.
-          {sign ? " You sign it first, so the record names you." : null}
-        </p>
       </div>
 
       {signingError ? (
@@ -310,8 +421,14 @@ function PayFormFields({
         </Outcome>
       ) : null}
 
-      <Button type="submit" disabled={busy}>
-        {signing ? "Sign in your wallet…" : pending ? "Sending…" : "Send payment"}
+      <Button type="submit" disabled={busy} size="lg">
+        {signing
+          ? "Sign in your wallet…"
+          : pending
+            ? "Sending…"
+            : preview?.verdict === "gated"
+              ? "Send for approval"
+              : "Send payment"}
       </Button>
     </form>
   );

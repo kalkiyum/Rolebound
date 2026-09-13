@@ -24,7 +24,7 @@ export function OrgNav({
 
   return (
     <nav className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-      <ul className="-mb-px flex gap-1 overflow-x-auto">
+      <ul className="flex gap-1 overflow-x-auto">
         {items.map((item) => {
           const active =
             item.href === base ? pathname === base : pathname.startsWith(item.href);
@@ -37,13 +37,13 @@ export function OrgNav({
                 className={cn(
                   "inline-flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm transition-colors",
                   active
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
+                    ? "border-chrome-foreground text-chrome-foreground"
+                    : "border-transparent text-chrome-muted hover:text-chrome-foreground",
                 )}
               >
                 {item.label}
                 {item.count ? (
-                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-amber-700 dark:text-amber-400">
+                  <span className="rounded-full bg-gated px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-chrome">
                     {item.count}
                   </span>
                 ) : null}

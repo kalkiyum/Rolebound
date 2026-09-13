@@ -93,7 +93,7 @@ export default async function RecurringPage({
                 <div className="text-right">
                   <Money base={s.amount} className="text-lg" muted />
                   {s.shortfall > 0n ? (
-                    <p className="mt-1 text-sm text-amber-700 dark:text-amber-400">
+                    <p className="mt-1 text-sm text-gated-ink">
                       {s.roleName} is <Money base={s.shortfall} unit={null} />{" "}
                       short for {dayLabel(s.nextRunAt)}
                     </p>

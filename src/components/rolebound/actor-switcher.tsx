@@ -36,7 +36,7 @@ export function ActorSwitcher({
       <input type="hidden" name="orgId" value={orgId} />
       <label
         htmlFor="actor"
-        className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground"
+        className="font-mono text-[10px] uppercase tracking-wider text-chrome-muted"
         title="Development only. Identity comes from the signed-in session once Privy login is wired up."
       >
         acting as
@@ -47,7 +47,7 @@ export function ActorSwitcher({
         defaultValue={actorId ?? ""}
         disabled={pending}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        className="rounded-md border border-input bg-background px-2 py-1 text-sm disabled:opacity-50"
+        className="rounded-md border border-white/20 bg-white/10 px-2 py-1 text-sm text-chrome-foreground disabled:opacity-50 [&>option]:text-foreground"
       >
         {members.map((m) => (
           <option key={m.id} value={m.id}>

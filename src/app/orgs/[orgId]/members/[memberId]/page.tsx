@@ -104,7 +104,7 @@ export default async function MemberPage({
                     </div>
 
                     {!role.otherSpendersRemain ? (
-                      <p className="mt-3 rounded-md border border-amber-600/25 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-400 text-pretty">
+                      <p className="mt-3 rounded-md border border-gated/30 bg-gated-soft p-3 text-sm text-gated-ink text-pretty">
                         Nobody else can spend from {role.roleName}. Remove them
                         and this role goes quiet until someone is added.
                       </p>

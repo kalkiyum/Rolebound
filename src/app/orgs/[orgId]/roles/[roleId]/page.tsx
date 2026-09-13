@@ -83,6 +83,7 @@ export default async function RoleDetailPage({
                   roleName={role.name}
                   capPerTx={role.capPerTx}
                   remainingMonthly={remainingMonthly}
+                  capMonthly={role.capMonthly}
                   canSpend={canSpend}
                   signingEnabled={privyConfigured()}
                 />
@@ -177,7 +178,7 @@ export default async function RoleDetailPage({
                 <Figure
                   label="Awaiting approval"
                   value={spend.pending}
-                  swatch={spend.capMonthly === null ? null : "bg-amber-500/60"}
+                  swatch={spend.capMonthly === null ? null : "bg-gated/60"}
                 />
               ) : null}
               {remainingMonthly !== null ? (
@@ -218,7 +219,7 @@ export default async function RoleDetailPage({
             </h2>
 
             {holders.length === 0 ? (
-              <p className="mt-3 text-sm text-amber-700 dark:text-amber-400 text-pretty">
+              <p className="mt-3 text-sm text-gated-ink text-pretty">
                 Nobody holds this role. It cannot spend until someone is added.
               </p>
             ) : (

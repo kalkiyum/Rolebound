@@ -41,13 +41,25 @@ export default async function OrgLayout({
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <header className="border-b border-border">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-          <Link href="/" className="flex items-baseline gap-2 py-1.5 -my-1.5">
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Rolebound
+      {/* The chrome is dark and the work is light. Two reasons: the dark band
+          gives the product an identity that a border-bottom does not, and it
+          marks the header as furniture — so that on every screen below it the
+          brightest thing is the money. */}
+      <header className="bg-chrome text-chrome-foreground">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3.5 sm:px-6">
+          <Link href="/" className="flex items-center gap-2.5 py-1.5 -my-1.5">
+            <span
+              aria-hidden
+              className="grid size-6 place-items-center rounded-[0.3rem] bg-chrome-foreground text-[11px] font-bold text-chrome"
+            >
+              R
             </span>
-            <span className="text-sm font-medium">{org.name}</span>
+            <span className="flex items-baseline gap-2">
+              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-chrome-muted">
+                Rolebound
+              </span>
+              <span className="text-sm font-medium">{org.name}</span>
+            </span>
           </Link>
 
           <div className="ml-auto">
