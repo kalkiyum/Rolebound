@@ -7,6 +7,7 @@ import { listRoles } from "@/lib/roles";
 import { OffboardForm } from "@/components/rolebound/offboard-form";
 import { GrantForm } from "@/components/rolebound/grant-form";
 import { RevokeButton } from "@/components/rolebound/revoke-button";
+import { IssueApiKey } from "@/components/rolebound/issue-api-key";
 import {
   AddressChip,
   KindBadge,
@@ -179,7 +180,25 @@ export default async function MemberPage({
           </section>
         </div>
 
-        <aside>
+        <aside className="space-y-6">
+          {member.kind === "agent" ? (
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h2 className="text-sm font-medium">API key</h2>
+              <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
+                {member.apiKeyHash
+                  ? "This agent has a key. Only its hash is stored, so the key itself cannot be shown again — it can only be replaced."
+                  : "This agent cannot authenticate yet. A key lets it request payments through the API, bounded by the same grants and caps."}
+              </p>
+              <div className="mt-5">
+                <IssueApiKey
+                  orgId={orgId}
+                  memberId={memberId}
+                  hasKey={member.apiKeyHash !== null}
+                />
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-lg border border-destructive/30 p-5">
             <h2 className="text-sm font-medium">Offboard</h2>
             <p className="mt-1.5 text-sm text-muted-foreground text-pretty">

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { listRoles } from "@/lib/roles";
 import { orgMembers } from "@/lib/session";
 import { memberSpend } from "@/lib/spend";
+import { NewMemberForm } from "@/components/rolebound/new-member-form";
 import {
   EmptyState,
   KindBadge,
@@ -25,7 +26,9 @@ export default async function MembersPage({
       <PageHeader
         title="People & agents"
         description="Agents sit in the same table as people, hold the same grants, and answer to the same caps. There is no separate, quieter path for software."
-      />
+      >
+        <NewMemberForm orgId={orgId} />
+      </PageHeader>
 
       {members.length === 0 ? (
         <EmptyState title="Nobody here yet">

@@ -1,10 +1,13 @@
 import { notFound } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db, schema } from "@/db";
 import { cn } from "@/lib/utils";
 import { roleDetail } from "@/lib/role-detail";
 import { roleBalances } from "@/lib/balances";
 import { currentMember, privyConfigured } from "@/lib/session";
 import { PayForm } from "@/components/rolebound/pay-form";
 import { DissolveRole } from "@/components/rolebound/dissolve-role";
+import { FundRole } from "@/components/rolebound/fund-role";
 import { dissolutionImpact } from "@/lib/dissolution";
 import {
   Money,
@@ -30,8 +33,21 @@ export default async function RoleDetailPage({
   if (!detail) notFound();
 
   const { role, holders, payments, spend } = detail;
-  const balances = await roleBalances([role.address]);
+
+  // The role's wallet and the treasury that funds it, read together: the
+  // funding control needs both sides to say anything useful, and two
+  // separate round trips could disagree about the same moment.
+  const org = await db.query.organizations.findFirst({
+    where: eq(schema.organizations.id, orgId),
+  });
+  const treasuryAddress = org?.treasuryAddress ?? null;
+  const balances = await roleBalances(
+    treasuryAddress ? [role.address, treasuryAddress] : [role.address],
+  );
   const balance = balances.get(role.address.toLowerCase()) ?? null;
+  const treasuryBalance = treasuryAddress
+    ? (balances.get(treasuryAddress.toLowerCase()) ?? null)
+    : null;
 
   const remainingMonthly =
     spend.remaining === null ? null : spend.remaining.toString();
@@ -204,6 +220,18 @@ export default async function RoleDetailPage({
                 </dd>
               </div>
             </dl>
+
+            {role.status === "active" && treasuryAddress ? (
+              <div className="mt-4 border-t border-border pt-4">
+                <FundRole
+                  orgId={orgId}
+                  roleId={role.id}
+                  roleName={role.name}
+                  balance={balance}
+                  treasuryBalance={treasuryBalance}
+                />
+              </div>
+            ) : null}
 
             <p className="mt-4 border-t border-border pt-4 text-xs text-muted-foreground text-pretty">
               A payment awaiting approval has not left the wallet, and still

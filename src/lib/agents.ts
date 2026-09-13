@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
+import { logActivity } from "./activity";
 
 /**
  * Agents authenticate with an API key; people authenticate with Privy. Both
@@ -38,7 +39,10 @@ export class NotAnAgent extends Error {
  * is reissued rather than recovered — and reissuing invalidates the old one,
  * which is the whole point of having a rotation path.
  */
-export async function issueApiKey(memberId: string): Promise<{ key: string }> {
+export async function issueApiKey(
+  memberId: string,
+  actorId?: string,
+): Promise<{ key: string }> {
   const member = await db.query.members.findFirst({
     where: eq(schema.members.id, memberId),
   });
@@ -52,6 +56,17 @@ export async function issueApiKey(memberId: string): Promise<{ key: string }> {
     .update(schema.members)
     .set({ apiKeyHash: hashKey(key) })
     .where(eq(schema.members.id, memberId));
+
+  // Issuing a credential that can move money is a state change worth
+  // explaining later, and reissuing silently invalidates the previous key —
+  // so the feed records that it happened. The key itself never goes near it.
+  await logActivity({
+    orgId: member.orgId,
+    type: "agent.key_issued",
+    actorId: actorId ?? null,
+    subjectId: member.id,
+    payload: { displayName: member.displayName, reissued: member.apiKeyHash !== null },
+  });
 
   return { key };
 }

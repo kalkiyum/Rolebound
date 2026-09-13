@@ -311,7 +311,12 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {children ? <div className="flex shrink-0 gap-2">{children}</div> : null}
+      {/* shrink-0 keeps a row of buttons from being squeezed, but the slot
+          also holds forms that expand in place — so it may take the full
+          width and wrap onto its own line rather than compress. */}
+      {children ? (
+        <div className="flex max-w-full shrink-0 gap-2">{children}</div>
+      ) : null}
     </div>
   );
 }

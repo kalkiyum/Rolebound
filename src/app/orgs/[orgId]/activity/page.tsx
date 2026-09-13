@@ -35,8 +35,14 @@ function headline(entry: FeedEntry) {
       return `${who} created ${role}`;
     case "role.dissolved":
       return `${who} dissolved ${role}`;
+    case "role.funded":
+      return `${who} funded ${role} from the treasury`;
     case "member.added":
       return `${who} added ${subject}`;
+    case "agent.key_issued":
+      return entry.payload?.reissued
+        ? `${who} reissued ${subject}'s API key, invalidating the old one`
+        : `${who} issued an API key to ${subject}`;
     case "grant.created":
       return `${who} gave ${subject} ${cap} rights on ${role}`;
     case "grant.revoked":

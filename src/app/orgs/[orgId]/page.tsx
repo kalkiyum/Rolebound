@@ -6,6 +6,7 @@ import { listRoles } from "@/lib/roles";
 import { roleBalances } from "@/lib/balances";
 import { monthSpend, type MonthSpend } from "@/lib/spend";
 import { recentPayments } from "@/lib/feed";
+import { NewRoleForm } from "@/components/rolebound/new-role-form";
 import {
   Money,
   SpendMeter,
@@ -76,7 +77,9 @@ export default async function RolesPage({ params }: PageProps<"/orgs/[orgId]">) 
       <PageHeader
         title="Roles"
         description="Money sits in the role, not with a person. Each one is its own wallet, under its own policy, with its own budget — and everything below is read from the chain, never cached."
-      />
+      >
+        <NewRoleForm orgId={orgId} />
+      </PageHeader>
 
       {active.length > 0 ? (
         <>

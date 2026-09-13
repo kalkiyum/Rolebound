@@ -7,7 +7,10 @@ import { cookies } from "next/headers";
 import { requestPayment } from "@/lib/payments";
 import { approvePayment, rejectPayment, ApprovalDenied } from "@/lib/approvals";
 import { offboardMember } from "@/lib/offboarding";
-import { revokeGrants, grantCapability } from "@/lib/roles";
+import { createRole, revokeGrants, grantCapability } from "@/lib/roles";
+import { addMember } from "@/lib/orgs";
+import { issueApiKey, NotAnAgent } from "@/lib/agents";
+import { fundRole, FundingDenied } from "@/lib/treasury";
 import { cancelSchedule, createSchedule, runSweep } from "@/lib/schedules";
 import { dissolve } from "@/lib/dissolution";
 import { SpendDenied } from "@/lib/gate";
@@ -22,7 +25,12 @@ import { formatUsdc, parseUsdc } from "@/lib/format";
  * person can act on.
  */
 export type ActionResult =
-  | { ok: true; message: string }
+  /**
+   * `secret` is shown once and never stored in plaintext, so the UI has to
+   * put it in front of the person at this moment or not at all. It is on the
+   * result rather than fetched afterwards because there is nothing to fetch.
+   */
+  | { ok: true; message: string; secret?: string }
   | { ok: false; message: string; code?: string };
 
 async function actorFor(orgId: string) {
@@ -396,6 +404,158 @@ export async function runSweepAction(
 
     return { ok: true, message: `Swept: ${parts.join(", ")}.` };
   } catch (err) {
+    return { ok: false, message: messageOf(err) };
+  }
+}
+
+/**
+ * Creating a role provisions a real wallet under a real policy, so this is
+ * the one action here that reaches outside the database before it commits.
+ * It is slow for that reason, and worth the wait: the cap the form asks for
+ * is written into the enclave in the same operation that writes it to the
+ * roles table, which is why the two can never disagree.
+ */
+export async function createRoleAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const orgId = String(formData.get("orgId"));
+  const name = String(formData.get("name") ?? "").trim();
+  const perTxRaw = String(formData.get("capPerTx") ?? "").trim();
+  const monthlyRaw = String(formData.get("capMonthly") ?? "").trim();
+
+  if (!name) return { ok: false, message: "Give the role a name." };
+
+  const capPerTx = parseUsdc(perTxRaw);
+  if (capPerTx === null || capPerTx <= 0n) {
+    return { ok: false, message: "Set a per-payment cap above zero." };
+  }
+
+  // Left blank means uncapped, which is a real choice and not a mistake —
+  // Operations is seeded that way. But an uncapped role gets no enclave
+  // ceiling, so the gate alone governs it, and the form says so.
+  let capMonthly: bigint | null = null;
+  if (monthlyRaw) {
+    capMonthly = parseUsdc(monthlyRaw);
+    if (capMonthly === null || capMonthly <= 0n) {
+      return { ok: false, message: "The monthly budget has to be above zero, or blank." };
+    }
+    if (capMonthly < capPerTx) {
+      return {
+        ok: false,
+        message:
+          "The monthly budget is below the per-payment cap, so no payment could ever clear. " +
+          "Raise the budget or lower the cap.",
+      };
+    }
+  }
+
+  try {
+    const actor = await actorFor(orgId);
+    const role = await createRole({
+      orgId,
+      name,
+      capPerTx,
+      capMonthly,
+      actorId: actor.id,
+    });
+    revalidatePath(`/orgs/${orgId}`, "layout");
+    return {
+      ok: true,
+      message: `${role.name} created, with its own wallet at ${role.address.slice(0, 6)}…${role.address.slice(-4)}.`,
+    };
+  } catch (err) {
+    return { ok: false, message: messageOf(err) };
+  }
+}
+
+/**
+ * People and agents are added the same way, into the same table, because
+ * they are the same kind of thing to everything downstream. A new member
+ * holds nothing until someone grants it — being in the org is not authority.
+ */
+export async function addMemberAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const orgId = String(formData.get("orgId"));
+  const displayName = String(formData.get("displayName") ?? "").trim();
+  const kind = formData.get("kind") === "agent" ? "agent" : "person";
+
+  if (!displayName) return { ok: false, message: "Give them a name." };
+
+  try {
+    const actor = await actorFor(orgId);
+    const member = await addMember({ orgId, kind, displayName, actorId: actor.id });
+    revalidatePath(`/orgs/${orgId}`, "layout");
+    return {
+      ok: true,
+      message: `${member.displayName} added. They hold nothing yet — give them rights on a role.`,
+    };
+  } catch (err) {
+    return { ok: false, message: messageOf(err) };
+  }
+}
+
+/**
+ * Hands back the key exactly once. Reissuing invalidates the previous one,
+ * so the form warns before doing it rather than after.
+ */
+export async function issueApiKeyAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const orgId = String(formData.get("orgId"));
+  const memberId = String(formData.get("memberId"));
+
+  try {
+    const actor = await actorFor(orgId);
+    const { key } = await issueApiKey(memberId, actor.id);
+    revalidatePath(`/orgs/${orgId}`, "layout");
+    return {
+      ok: true,
+      message: "Key issued. It is shown once and cannot be recovered.",
+      secret: key,
+    };
+  } catch (err) {
+    if (err instanceof NotAnAgent) {
+      return {
+        ok: false,
+        message: "Only agents carry API keys. People sign in instead.",
+        code: "not_an_agent",
+      };
+    }
+    return { ok: false, message: messageOf(err) };
+  }
+}
+
+/**
+ * Topping a role up from the treasury. Not a payment: the caps bound what a
+ * role pays out, not what it is given, so this makes no trip through the
+ * gate and commits no reason onchain.
+ */
+export async function fundRoleAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const orgId = String(formData.get("orgId"));
+  const roleId = String(formData.get("roleId"));
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+
+  const amount = parseUsdc(amountRaw);
+  if (amount === null || amount <= 0n) {
+    return { ok: false, message: "Enter an amount above zero." };
+  }
+
+  try {
+    const actor = await actorFor(orgId);
+    await fundRole({ orgId, roleId, amount, actorId: actor.id });
+    revalidatePath(`/orgs/${orgId}`, "layout");
+    return { ok: true, message: `Moved ${formatUsdc(amount)} USDC from the treasury.` };
+  } catch (err) {
+    if (err instanceof FundingDenied) {
+      return { ok: false, message: err.message, code: err.code };
+    }
     return { ok: false, message: messageOf(err) };
   }
 }
