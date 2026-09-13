@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
@@ -47,19 +48,18 @@ export default async function OrgLayout({
           brightest thing is the money. */}
       <header className="bg-chrome text-chrome-foreground">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3.5 sm:px-6">
-          <Link href="/" className="flex items-center gap-2.5 py-1.5 -my-1.5">
-            <span
-              aria-hidden
-              className="grid size-6 place-items-center rounded-[0.3rem] bg-chrome-foreground text-[11px] font-bold text-chrome"
-            >
-              R
-            </span>
-            <span className="flex items-baseline gap-2">
-              <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-chrome-muted">
-                Rolebound
-              </span>
-              <span className="text-sm font-medium">{org.name}</span>
-            </span>
+          {/* The artwork is black on a transparent ground, and the chrome band
+              is dark in both themes — so the inversion is unconditional and
+              needs no dark: variant. */}
+          <Link href="/" className="flex items-center py-1.5 -my-1.5">
+            <Image
+              src="/logo.png"
+              alt="Rolebound"
+              width={1010}
+              height={220}
+              priority
+              className="h-[1.375rem] w-auto invert"
+            />
           </Link>
 
           <div className="ml-auto">

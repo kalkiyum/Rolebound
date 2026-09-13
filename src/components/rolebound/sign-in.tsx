@@ -1,6 +1,7 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,20 @@ export function SignIn() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-6 py-16">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Rolebound</h1>
+        {/* The heading stays an h1 — the wordmark is the page's title, so the
+            image carries it and the alt text is what a screen reader hears.
+            Unlike the header, this sits on the themed page ground, so the
+            black artwork only inverts in dark mode. */}
+        <h1>
+          <Image
+            src="/logo.png"
+            alt="Rolebound"
+            width={1010}
+            height={220}
+            priority
+            className="h-7 w-auto dark:invert"
+          />
+        </h1>
         <p className="text-muted-foreground text-sm">
           Spending authority that follows the role, not the person. Sign in to
           see what you can spend, and what you have to explain.
