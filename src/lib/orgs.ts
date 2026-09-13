@@ -2,6 +2,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { logActivity } from "./activity";
+import { generateInviteCode } from "./identity";
 import { provisionTreasuryWallet } from "./wallets";
 
 /**
@@ -60,6 +61,13 @@ export async function addMember(input: {
       kind: input.kind,
       displayName: input.displayName,
       privyUserId: input.privyUserId ?? null,
+      // A seat somebody still has to walk into needs an invitation. One that
+      // already belongs to an account does not, and agents never do — they
+      // authenticate with a key, not a login.
+      inviteCode:
+        input.kind === "person" && !input.privyUserId
+          ? generateInviteCode()
+          : null,
     })
     .returning();
 

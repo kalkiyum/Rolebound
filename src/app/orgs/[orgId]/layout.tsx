@@ -10,7 +10,6 @@ import { OrgNav } from "@/components/rolebound/org-nav";
 import { SignIn } from "@/components/rolebound/sign-in";
 import { ClaimSeat } from "@/components/rolebound/claim-seat";
 import { SignOut } from "@/components/rolebound/sign-out";
-import { unclaimedMembers } from "@/lib/identity";
 import { verifiedPrivyUserId } from "@/lib/privy-auth";
 
 export default async function OrgLayout({
@@ -37,7 +36,7 @@ export default async function OrgLayout({
   if (privyConfigured() && !actor) {
     const signedIn = await verifiedPrivyUserId();
     if (!signedIn) return <SignIn />;
-    return <ClaimSeat orgId={orgId} members={await unclaimedMembers(orgId)} />;
+    return <ClaimSeat orgName={org.name} />;
   }
 
   return (
@@ -64,7 +63,10 @@ export default async function OrgLayout({
 
           <div className="ml-auto">
             {privyConfigured() ? (
-              <SignOut name={actor?.displayName ?? null} />
+              <SignOut
+                name={actor?.displayName ?? null}
+                href={actor ? `/orgs/${orgId}/members/${actor.id}` : null}
+              />
             ) : (
               <ActorSwitcher orgId={orgId} members={members} actorId={actor?.id ?? null} />
             )}

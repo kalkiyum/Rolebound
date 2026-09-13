@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, inject, it } from "vitest";
-import { encodeFunctionData, getAddress } from "viem";
+import { encodeFunctionData } from "viem";
 import {
   ANVIL_KEYS,
   ANVIL_URL,

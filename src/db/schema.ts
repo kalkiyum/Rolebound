@@ -8,6 +8,7 @@ import {
   timestamp,
   jsonb,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -107,6 +108,15 @@ export const members = pgTable(
     apiKeyHash: text("api_key_hash"),
     /** Embedded wallet address — the key that signs justifications. */
     address: address("address"),
+    /**
+     * What makes a seat claimable by one particular person.
+     *
+     * Without it, every unclaimed seat in an org is offered to whoever signs
+     * in first, which means a stranger can take the seat that holds approve
+     * rights. The code is the invitation: it is cleared the moment the seat
+     * is claimed, so it cannot be replayed.
+     */
+    inviteCode: text("invite_code"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -114,6 +124,7 @@ export const members = pgTable(
   (t) => [
     index("members_org_idx").on(t.orgId),
     index("members_privy_user_idx").on(t.privyUserId),
+    uniqueIndex("members_invite_code_idx").on(t.inviteCode),
   ],
 );
 

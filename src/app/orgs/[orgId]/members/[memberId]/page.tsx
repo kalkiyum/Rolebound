@@ -4,10 +4,13 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/db";
 import { offboardingImpact } from "@/lib/offboarding";
 import { listRoles } from "@/lib/roles";
+import { currentMember, privyConfigured } from "@/lib/session";
 import { OffboardForm } from "@/components/rolebound/offboard-form";
 import { GrantForm } from "@/components/rolebound/grant-form";
 import { RevokeButton } from "@/components/rolebound/revoke-button";
 import { IssueApiKey } from "@/components/rolebound/issue-api-key";
+import { WalletPanel } from "@/components/rolebound/wallet-panel";
+import { InvitePanel } from "@/components/rolebound/invite-panel";
 import {
   AddressChip,
   KindBadge,
@@ -26,10 +29,15 @@ export default async function MemberPage({
   });
   if (!member) notFound();
 
-  const [impact, roles] = await Promise.all([
+  const [impact, roles, actor] = await Promise.all([
     offboardingImpact({ orgId, memberId }),
     listRoles(orgId),
+    currentMember(orgId),
   ]);
+
+  // Only your own key is yours to export, and only Privy can export it —
+  // in local development there is no embedded wallet to show.
+  const isSelf = privyConfigured() && actor?.id === member.id;
 
   const heldRoleIds = new Set(impact.roles.map((r) => r.roleId));
   const available = roles.filter(
@@ -64,7 +72,7 @@ export default async function MemberPage({
         </div>
       </PageHeader>
 
-      {member.address ? (
+      {member.address && !isSelf ? (
         <AddressChip address={member.address} className="mb-6 block text-sm" />
       ) : null}
 
@@ -181,6 +189,34 @@ export default async function MemberPage({
         </div>
 
         <aside className="space-y-6">
+          {isSelf ? (
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h2 className="text-sm font-medium">Your wallet</h2>
+              <div className="mt-4">
+                <WalletPanel address={member.address} />
+              </div>
+            </section>
+          ) : null}
+
+          {member.kind === "person" && !member.privyUserId ? (
+            <section className="rounded-lg border border-border bg-card p-5">
+              <h2 className="text-sm font-medium">Invitation</h2>
+              <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
+                Nobody has signed in as {member.displayName} yet. The seat and
+                its authority already exist; the link below is what attaches a
+                person to it.
+              </p>
+              <div className="mt-5">
+                <InvitePanel
+                  orgId={orgId}
+                  memberId={memberId}
+                  displayName={member.displayName}
+                  code={member.inviteCode}
+                />
+              </div>
+            </section>
+          ) : null}
+
           {member.kind === "agent" ? (
             <section className="rounded-lg border border-border bg-card p-5">
               <h2 className="text-sm font-medium">API key</h2>

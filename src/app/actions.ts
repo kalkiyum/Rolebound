@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { claimMember } from "@/lib/identity";
+import { claimMember, memberForInviteCode, reissueInvite } from "@/lib/identity";
 import { embeddedWalletAddress, verifiedPrivyUserId } from "@/lib/privy-auth";
 import { cookies } from "next/headers";
 import { requestPayment } from "@/lib/payments";
@@ -238,7 +238,7 @@ export async function claimSeatAction(
   formData: FormData,
 ): Promise<ActionResult> {
   const orgId = String(formData.get("orgId"));
-  const memberId = String(formData.get("memberId"));
+  const inviteCode = String(formData.get("inviteCode") ?? "").trim();
 
   try {
     const privyUserId = await verifiedPrivyUserId();
@@ -256,9 +256,49 @@ export async function claimSeatAction(
       };
     }
 
-    await claimMember({ orgId, memberId, privyUserId, walletAddress });
+    // The invitation names the seat. The claimer never chooses which one —
+    // that choice was the hole: every unclaimed seat in the org used to be
+    // offered to whoever signed in first, approve rights included.
+    const seat = await memberForInviteCode(orgId, inviteCode);
+    if (!seat) {
+      return {
+        ok: false,
+        message: "That invitation is not valid, or has already been used.",
+        code: "bad_invite",
+      };
+    }
+
+    const member = await claimMember({
+      orgId,
+      memberId: seat.id,
+      privyUserId,
+      walletAddress,
+      inviteCode,
+    });
     revalidatePath(`/orgs/${orgId}`, "layout");
-    return { ok: true, message: "Welcome back." };
+    return { ok: true, message: `Welcome, ${member.displayName}.` };
+  } catch (err) {
+    return { ok: false, message: messageOf(err) };
+  }
+}
+
+/**
+ * Issues a fresh invitation for a seat nobody has taken yet, invalidating
+ * any previous link. Also the way a seat that predates invitations becomes
+ * claimable at all.
+ */
+export async function reissueInviteAction(
+  _prev: ActionResult | null,
+  formData: FormData,
+): Promise<ActionResult> {
+  const orgId = String(formData.get("orgId"));
+  const memberId = String(formData.get("memberId"));
+
+  try {
+    await actorFor(orgId);
+    const code = await reissueInvite({ orgId, memberId });
+    revalidatePath(`/orgs/${orgId}`, "layout");
+    return { ok: true, message: "New invitation issued. Any earlier link is dead.", secret: code };
   } catch (err) {
     return { ok: false, message: messageOf(err) };
   }
